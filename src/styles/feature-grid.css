@@ -1,0 +1,29 @@
+.feature-card {
+  @apply p-8 glass-effect border-2 border-transparent hover:border-primary/20 transition-all duration-300 relative;
+}
+
+.feature-icon {
+  @apply w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-lg transition-transform duration-300 group-hover:scale-110;
+}
+
+.feature-icon.primary {
+  @apply bg-gradient-to-br from-primary to-primary/60 text-primary-foreground;
+}
+
+.feature-icon.accent {
+  @apply bg-gradient-to-br from-accent to-accent/60 text-accent-foreground;
+}
+
+.feature-metric {
+  @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-card {
+    transition: none;
+  }
+  
+  .feature-icon {
+    transition: none;
+  }
+}

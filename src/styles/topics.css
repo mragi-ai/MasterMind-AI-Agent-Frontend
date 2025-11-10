@@ -1,0 +1,26 @@
+.topic-card {
+  @apply bg-card border-2 border-border;
+}
+
+.topic-progress-ring {
+  @apply relative w-12 h-12 rounded-full flex items-center justify-center;
+  background: conic-gradient(
+    hsl(var(--primary)) calc(var(--progress) * 1%),
+    hsl(var(--muted)) 0
+  );
+}
+
+.topic-progress-ring::before {
+  content: '';
+  @apply absolute inset-1 rounded-full bg-black/80;
+}
+
+.topic-progress-text {
+  @apply relative text-[10px] font-bold text-white;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topic-card video {
+    display: none;
+  }
+}
