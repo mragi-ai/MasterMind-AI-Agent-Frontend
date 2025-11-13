@@ -10,6 +10,7 @@ import RoleSelection from "./pages/RoleSelection";
 import ResetPassword from "./pages/ResetPassword";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { isAuthenticated } from "@/lib/auth";
+import VideoLessons from "./pages/VideoLessons";
 
 const App = () => (
   <TooltipProvider>
@@ -32,6 +33,14 @@ const App = () => (
           element={
             <ProtectedRoute>
               <Index />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/video-lessons"
+          element={
+            <ProtectedRoute>
+              <VideoLessons />
             </ProtectedRoute>
           }
         />

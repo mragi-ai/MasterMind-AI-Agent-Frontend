@@ -34,6 +34,7 @@ type Props = {
   phoneNumber?: string;
   onEscalate?: () => void;
   startOpen?: boolean;
+  supportEmail?: string;
 };
 
 export default function AITrainerWidget({
@@ -43,6 +44,7 @@ export default function AITrainerWidget({
   phoneNumber,
   onEscalate,
   startOpen = false,
+  supportEmail = "training-support@mastermind.ai",
 }: Props) {
   const [open, setOpen] = useState(startOpen);
   const [hideLauncher, setHideLauncher] = useState(false);
@@ -292,15 +294,8 @@ export default function AITrainerWidget({
     if (value === "escalate") {
       if (onEscalate) {
         onEscalate();
-      } else {
-        pushMessage({
-          id: crypto.randomUUID(),
-          role: "system",
-          kind: "text",
-          text: "Connecting you to a specialist. Average wait time is 2-3 minutes.",
-          ts: new Date().toLocaleTimeString(),
-        });
       }
+      pushContactDetails();
     } else {
       await sendText(label);
     }
@@ -339,6 +334,17 @@ export default function AITrainerWidget({
       });
       return false;
     }
+  };
+
+  const pushContactDetails = () => {
+    const contactNumber = phoneNumber || "+1 (407) 307-0855";
+    pushMessage({
+      id: generateId(),
+      role: "assistant",
+      kind: "text",
+      text: `You can reach our mentor desk directly at ${contactNumber} or email us at ${supportEmail}`,
+      ts: new Date().toLocaleTimeString(),
+    });
   };
 
   const startRecording = async () => {
@@ -523,17 +529,12 @@ export default function AITrainerWidget({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() =>
-                  onEscalate
-                    ? onEscalate()
-                    : pushMessage({
-                        id: generateId(),
-                        role: "system",
-                        kind: "text",
-                        text: "We'll connect you to a specialist shortly.",
-                        ts: new Date().toLocaleTimeString(),
-                      })
-                }
+                onClick={() => {
+                  if (onEscalate) {
+                    onEscalate();
+                  }
+                  pushContactDetails();
+                }}
                 className="h-8 px-3 text-xs"
               >
                 Escalate
@@ -552,7 +553,7 @@ export default function AITrainerWidget({
 
           {/* Messages */}
           <div
-            className="flex-1 overflow-y-auto px-6 py-6 bg-gradient-to-br from-background via-background/95 to-background/90 space-y-4 max-w-4xl mx-auto w-full scrollbar-thin scrollbar-thumb-primary/10 scrollbar-track-transparent hover:scrollbar-thumb-primary/20 relative"
+            className="relative flex-1 overflow-y-auto px-6 py-6 bg-gradient-to-br from-background via-background/95 to-background/90 space-y-4 scrollbar-thin scrollbar-thumb-primary/10 scrollbar-track-transparent hover:scrollbar-thumb-primary/20"
             ref={listRef}
           >
             {/* Decorative elements */}
@@ -687,7 +688,7 @@ export default function AITrainerWidget({
           </div>
 
           {/* Composer */}
-          <div className="border-t border-border bg-gradient-to-r from-background to-background/95 px-6 py-4 flex gap-3 items-end shrink-0 backdrop-blur-sm max-w-4xl mx-auto w-full">
+          <div className="flex shrink-0 items-end gap-3 border-t border-border bg-gradient-to-r from-background to-background/95 px-6 py-4 backdrop-blur-sm">
             <button
               className={cn(
                 "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
@@ -724,7 +725,7 @@ export default function AITrainerWidget({
               )}
             </button>
 
-            <div className="flex-1 relative group">
+            <div className="group relative flex-1">
               <textarea
                 ref={inputRef}
                 className={cn(
@@ -776,7 +777,7 @@ export default function AITrainerWidget({
             micPermission === "prompt" ||
             micPermission === "unsupported" ||
             !isSecure) && (
-            <div className="px-6 py-3 text-xs text-yellow-700 bg-yellow-50 border-t border-yellow-200 max-w-4xl mx-auto w-full">
+            <div className="w-full border-t border-yellow-200 bg-yellow-50 px-6 py-3 text-xs text-yellow-700">
               {!isSecure && (
                 <>
                   Microphone requires a secure context. Run on HTTPS or

@@ -15,7 +15,7 @@ import { saveAuth } from "@/lib/auth";
 import { initializeMsal, loginWithMicrosoft as msalLogin } from "@/lib/auth/msalUtils";
 import { MICROSOFT_CLIENT_ID } from "@/lib/auth/values";
 import { Separator } from "@/components/ui/separator";
-import { Sparkles, ShieldCheck, Clock } from "lucide-react";
+import { Sparkles, ShieldCheck, Clock, GraduationCap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 type FeatureHighlight = {
@@ -26,19 +26,19 @@ type FeatureHighlight = {
 
 const featureHighlights: FeatureHighlight[] = [
   {
-    icon: ShieldCheck,
-    title: "Enterprise security",
-    description: "SSO-first authentication with continuous compliance monitoring.",
+    icon: Sparkles,
+    title: "Role-based journeys",
+    description: "Carrier, customer, and agent personas with curated practice paths.",
   },
   {
-    icon: Sparkles,
-    title: "Intelligent workflows",
-    description: "Onboard, orchestrate, and iterate your AI agents in minutes.",
+    icon: GraduationCap,
+    title: "Guided simulations",
+    description: "Practice live conversations with AI coaches tuned to real scenarios.",
   },
   {
     icon: Clock,
-    title: "Real-time visibility",
-    description: "Track performance metrics and automate escalations instantly.",
+    title: "Progress intelligence",
+    description: "Track mastery scores, unlock certifications, and stay on schedule.",
   },
 ];
 
@@ -202,13 +202,13 @@ export default function Login() {
         <div className="flex-1 max-w-2xl space-y-8 text-center lg:text-left">
           <span className="inline-flex items-center justify-center gap-2 self-center rounded-full border border-white/15 bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 shadow-lg lg:self-start">
             <Sparkles className="h-4 w-4 text-white/80" />
-            MasterMind AI Platform
+            MasterMind Training Studio
           </span>
           <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-            Sign in to orchestrate your intelligent agent workforce
+            Sign in to unlock role-based AI training
           </h1>
           <p className="mx-auto max-w-xl text-base text-slate-300 sm:text-lg">
-            Unified access for operations, product, and leadership teams. Launch new automations, monitor conversations, and keep every workflow aligned with your governance model.
+            Develop next-level skills through guided chat simulations, cinematic micro-lessons, and measurable coaching loops built for logistics pros.
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -219,12 +219,12 @@ export default function Login() {
 
           <div className="mx-auto flex max-w-md flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur lg:mx-0 lg:flex-row lg:items-center lg:gap-6">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white">
-              <Clock className="h-5 w-5" />
+              <ShieldCheck className="h-5 w-5" />
             </div>
             <div className="space-y-1 text-left">
-              <p className="text-sm font-semibold text-white/90">99.95% platform uptime</p>
+              <p className="text-sm font-semibold text-white/90">4.9/5 learner satisfaction</p>
               <p className="text-xs text-white/70">
-                Join teams who automate securely while maintaining full visibility and control.
+                Teams master live conversations and video-led drills in as little as two weeks.
               </p>
             </div>
           </div>
@@ -239,7 +239,7 @@ export default function Login() {
                   Welcome back
                 </CardTitle>
                 <CardDescription className="text-base text-slate-500">
-                  Log in with your company email or continue with Microsoft SSO.
+                  Log in with your company email or continue with Microsoft SSO to resume your training journey.
                 </CardDescription>
                 <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-500">
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">

@@ -15,58 +15,86 @@ import { Sparkles } from "lucide-react";
 
 const commandItems = [
   {
-    id: "chat",
-    label: "Start a chat",
-    hint: "Open AI assistant",
-    onSelect: () => window.dispatchEvent(new CustomEvent("open-ai-trainer")),
-  },
-  {
-    id: "call",
-    label: "Call support",
-    hint: "tel:+14073070855",
-    onSelect: () => (window.location.href = "tel:+14073070855"),
-  },
-  {
-    id: "container",
-    label: "Tutorial: Check container availability",
-    hint: "Learn the process",
+    id: "resume-path",
+    label: "Resume training path",
+    hint: "Jump back into your next module",
     onSelect: () =>
       window.dispatchEvent(
         new CustomEvent("open-ai-trainer", {
-          detail: { prompt: "How do I check container availability?" },
+          detail: {
+            prompt:
+              "Guide me through the next step in my role-based training journey.",
+          },
         })
       ),
   },
   {
-    id: "billing",
-    label: "Tutorial: Billing disputes",
-    hint: "Create and track disputes",
+    id: "launch-simulation",
+    label: "Launch chat simulation",
+    hint: "Practice a scenario with AI feedback",
     onSelect: () =>
       window.dispatchEvent(
         new CustomEvent("open-ai-trainer", {
-          detail: { prompt: "How do I create a billing dispute?" },
+          detail: {
+            prompt:
+              "Start a role-play simulation that reflects my day-to-day responsibilities.",
+          },
         })
       ),
   },
   {
-    id: "tracking",
-    label: "Tutorial: Driver tracking",
-    hint: "Real-time location",
+    id: "recommend-video",
+    label: "Recommend a lesson",
+    hint: "Find the best video to watch now",
     onSelect: () =>
       window.dispatchEvent(
         new CustomEvent("open-ai-trainer", {
-          detail: { prompt: "How do I track last-mile drivers?" },
+          detail: {
+            prompt:
+              "Recommend a video lesson that matches my current role and progress.",
+          },
         })
       ),
   },
   {
-    id: "dispatch",
-    label: "Tutorial: Dispatch process",
-    hint: "Complete workflow",
+    id: "plan-coaching",
+    label: "Plan coaching week",
+    hint: "Balance practice and video drills",
     onSelect: () =>
       window.dispatchEvent(
         new CustomEvent("open-ai-trainer", {
-          detail: { prompt: "Show me the dispatch process" },
+          detail: {
+            prompt:
+              "Help me plan a week of training with chat simulations, lessons, and recap checkpoints.",
+          },
+        })
+      ),
+  },
+  {
+    id: "escalate-help",
+    label: "Escalate to mentor",
+    hint: "Request human coaching support",
+    onSelect: () =>
+      window.dispatchEvent(
+        new CustomEvent("open-ai-trainer", {
+          detail: {
+            prompt:
+              "I need a mentor for additional support on today's training topic.",
+          },
+        })
+      ),
+  },
+  {
+    id: "library-search",
+    label: "Search training library",
+    hint: "Find lessons by topic",
+    onSelect: () =>
+      window.dispatchEvent(
+        new CustomEvent("open-ai-trainer", {
+          detail: {
+            prompt:
+              "Search the training library for resources related to my role.",
+          },
         })
       ),
   },

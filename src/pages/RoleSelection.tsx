@@ -12,11 +12,9 @@ import { Button } from "@/components/ui/button";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
   Truck,
-  DollarSign,
-  Phone,
-  Package,
-  CarFront,
-  MapPin,
+  Headset,
+  ShieldCheck,
+  CheckCircle2,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,51 +32,30 @@ type Role = {
 const roles: Role[] = [
   {
     id: 1,
-    title: "Dispatcher",
-    description: "Manage and coordinate fleet operations and deliveries",
+    title: "Carrier Representative",
+    description:
+      "Coordinate with carriers, oversee loads, and keep freight moving on schedule.",
     icon: Truck,
     color: "primary",
-    role: "dispatcher",
+    role: "carrier_representative",
   },
   {
     id: 2,
-    title: "Billing Specialist",
-    description: "Handle invoicing, payments, and financial operations",
-    icon: DollarSign,
+    title: "Customer Representative",
+    description:
+      "Support shippers and receivers, deliver proactive updates, and resolve issues fast.",
+    icon: Headset,
     color: "accent",
-    role: "billing",
+    role: "customer_representative",
   },
   {
     id: 3,
-    title: "Customer Service",
-    description: "Provide support and resolve customer inquiries",
-    icon: Phone,
-    color: "primary",
-    role: "customer_service",
-  },
-  {
-    id: 4,
-    title: "Warehouse Manager",
-    description: "Oversee inventory and warehouse operations",
-    icon: Package,
+    title: "Agent Manager",
+    description:
+      "Orchestrate agent performance, monitor KPIs, and deliver operational insights.",
+    icon: ShieldCheck,
     color: "accent",
-    role: "warehouse",
-  },
-  {
-    id: 5,
-    title: "Fleet Manager",
-    description: "Manage vehicle maintenance and driver operations",
-    icon: CarFront,
-    color: "primary",
-    role: "fleet",
-  },
-  {
-    id: 6,
-    title: "Route Planner",
-    description: "Optimize delivery routes and schedules",
-    icon: MapPin,
-    color: "accent",
-    role: "route_planner",
+    role: "agent_manager",
   },
 ];
 
@@ -103,93 +80,151 @@ export default function RoleSelection() {
   };
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-background to-background/95">
-      {/* Aurora background */}
-      <div className="absolute inset-0 pointer-events-none opacity-40">
+    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_rgba(10,10,10,0))]">
+      {/* Ambient background */}
+      <div className="absolute inset-0 pointer-events-none opacity-30">
         <div
-          className="absolute top-0 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-float"
+          className="absolute top-[-10%] left-[5%] h-[28rem] w-[28rem] rounded-full bg-primary/15 blur-3xl animate-float"
           style={{ animationDuration: "8s" }}
         />
         <div
-          className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/15 rounded-full blur-3xl animate-float"
-          style={{ animationDuration: "10s", animationDelay: "-3s" }}
+          className="absolute bottom-[-10%] right-[10%] h-[32rem] w-[32rem] rounded-full bg-accent/20 blur-3xl animate-float"
+          style={{ animationDuration: "12s", animationDelay: "-4s" }}
         />
       </div>
 
-      <div className="relative container max-w-6xl mx-auto px-4 py-12">
-        <div className="space-y-6 text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-effect border border-primary/20">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-primary">
-              Select Your Role
-            </span>
-          </div>
+      <div className="relative container mx-auto max-w-7xl px-6 py-16">
+        <div className="grid items-start gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+          <section className="space-y-10">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-2 text-primary shadow-[0_0_32px_rgba(14,165,233,0.15)]">
+              <Sparkles className="h-4 w-4" />
+              <span className="text-sm font-medium uppercase tracking-wider">
+                Select Your Training Persona
+              </span>
+            </div>
 
-          <h1 className="text-4xl sm:text-5xl font-bold">
-            <span className="gradient-text">Choose Your Role,</span>
-            <br />
-            <span className="text-foreground">Get Specialized Help</span>
-          </h1>
+            <div className="space-y-5">
+              <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+                Tailored Learning Journeys for Every Logistics Pro
+              </h1>
+              <p className="text-lg leading-relaxed text-muted-foreground">
+                Choose the role that mirrors your responsibilities so we can
+                curate role-based simulations, guided chat practice, and
+                on-demand video lessons.
+              </p>
+            </div>
 
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Select your role to get personalized assistance and resources
-            tailored to your needs
-          </p>
-        </div>
+            <div className="grid gap-5">
+              {[
+                "Practice real conversations with AI coaches tuned to your role.",
+                "Watch micro-trainings and scenario breakdowns chosen for you.",
+                "Track mastery with live scorecards and certification checkpoints.",
+              ].map((item) => (
+                <div
+                  key={item}
+                  className="group flex items-center gap-3 rounded-xl border border-border/60 bg-background/80 px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.1)] backdrop-blur transition hover:border-primary/40 hover:shadow-[0_16px_40px_rgba(14,165,233,0.15)]"
+                >
+                  <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </span>
+                  <p className="text-sm font-medium text-foreground/90">
+                    {item}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
-          {roles.map((role) => {
-            const isSelected = selectedRole === role.id;
-            const Icon = role.icon;
+          <section className="space-y-8 rounded-3xl border border-border/50 bg-background/70 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.2)] backdrop-blur-xl">
+            <header className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium uppercase tracking-wider text-primary">
+                  Persona Library
+                </p>
+                <h2 className="text-2xl font-semibold">
+                  Preview the learning plan aligned to your daily outcomes.
+                </h2>
+              </div>
+              <div className="rounded-full border border-border/80 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                3 Curated Tracks
+              </div>
+            </header>
 
-            return (
-              <Card
-                key={role.id}
-                className={cn(
-                  "feature-card group transition-all cursor-pointer hover:scale-[1.02]",
-                  isSelected &&
-                    "ring-2 ring-primary ring-offset-2 border-primary/30",
-                  !isSelected && "hover:shadow-lg hover:border-primary/20"
-                )}
-                onClick={() => handleRoleSelect(role.id)}
-              >
-                <CardHeader>
-                  <div
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {roles.map((role) => {
+                const isSelected = selectedRole === role.id;
+                const Icon = role.icon;
+
+                return (
+                  <Card
+                    key={role.id}
+                    onClick={() => handleRoleSelect(role.id)}
                     className={cn(
-                      "feature-icon mb-4",
-                      role.color === "primary" ? "primary" : "accent"
+                      "group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/80 transition duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_20px_45px_rgba(14,165,233,0.15)]",
+                      isSelected &&
+                        "border-primary/60 shadow-[0_24px_60px_rgba(14,165,233,0.28)] ring-1 ring-primary/40"
                     )}
                   >
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <CardTitle className="text-xl mb-2">{role.title}</CardTitle>
-                  <CardDescription className="text-muted-foreground">
-                    {role.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardFooter>
-                  <Button
-                    className="w-full transition-colors"
-                    variant={isSelected ? "default" : "outline"}
-                    size={isMobile ? "lg" : "default"}
-                  >
-                    {isSelected ? "Selected" : "Select Role"}
-                  </Button>
-                </CardFooter>
-              </Card>
-            );
-          })}
-        </div>
+                    <div className="absolute inset-x-8 top-0 h-1 rounded-b-full bg-gradient-to-r from-primary/80 via-primary to-transparent opacity-0 transition group-hover:opacity-100" />
+                    <CardHeader className="space-y-4 pb-0">
+                      <div
+                        className={cn(
+                          "flex h-12 w-12 items-center justify-center rounded-xl transition",
+                          role.color === "primary"
+                            ? "bg-primary/15 text-primary"
+                            : "bg-accent/15 text-accent-foreground"
+                        )}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="space-y-1">
+                        <CardTitle className="text-xl font-semibold">
+                          {role.title}
+                        </CardTitle>
+                        <CardDescription className="text-sm leading-relaxed text-muted-foreground">
+                          {role.description}
+                        </CardDescription>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex-1" />
+                    <CardFooter className="pt-0">
+                      <Button
+                        variant={isSelected ? "default" : "outline"}
+                        className={cn(
+                          "w-full transition",
+                          !isSelected &&
+                            "border-border/60 bg-background/80 text-foreground hover:border-primary/50 hover:text-primary"
+                        )}
+                        size={isMobile ? "lg" : "default"}
+                      >
+                        {isSelected ? "Selected Track" : "Preview Training"}
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                );
+              })}
+            </div>
 
-        <div className="mt-12 text-center">
-          <Button
-            size="lg"
-            className="px-8 py-6 text-lg shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
-            onClick={handleStartChatting}
-            disabled={!selectedRole}
-          >
-            Start Chatting
-          </Button>
+            <footer className="flex flex-col gap-4 rounded-2xl border border-dashed border-primary/30 bg-primary/5 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-primary">
+                  Need more customization?
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Start with the closest track. You can personalize lesson
+                  sequences, skill goals, and practice scenarios anytime.
+                </p>
+              </div>
+              <Button
+                size="lg"
+                className="min-w-[12rem] shadow-lg hover:shadow-xl"
+                onClick={handleStartChatting}
+                disabled={!selectedRole}
+              >
+                Enter Training Hub
+              </Button>
+            </footer>
+          </section>
         </div>
       </div>
     </div>
