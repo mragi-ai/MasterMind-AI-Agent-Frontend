@@ -11,6 +11,9 @@ import ResetPassword from "./pages/ResetPassword";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { isAuthenticated } from "@/lib/auth";
 import VideoLessons from "./pages/VideoLessons";
+import DemoRoles from "./pages/DemoRoles";
+import DemoChat from "./pages/DemoChat";
+import DemoCall from "./pages/DemoCall";
 
 const App = () => (
   <TooltipProvider>
@@ -54,6 +57,9 @@ const App = () => (
           }
         />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/demo-roles" element={<DemoRoles />} />
+        <Route path="/demo-chat" element={<DemoChat />} />
+        <Route path="/demo-call" element={<DemoCall />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

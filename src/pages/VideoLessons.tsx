@@ -3,10 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Calendar,
-  Clock,
-  MessageSquare,
-  Play,
   Search,
   Video as VideoIcon,
 } from "lucide-react";
@@ -24,7 +20,7 @@ const trendingQueries = [
 
 export default function VideoLessons() {
   const selectedRole = useAppStore((state) => state.selectedRole);
-  const [query, setQuery] = useState(DEFAULT_QUERY);
+  const [query, setQuery] = useState("");
   const [results, setResults] = useState<VideoSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -42,7 +38,7 @@ export default function VideoLessons() {
 
     try {
       const response = await searchVideos(trimmed);
-      setResults(response.results ?? []);
+      setResults(response.videos ?? []);
       setHasSearched(true);
     } catch (err) {
       console.error("Video search failed:", err);
@@ -53,7 +49,7 @@ export default function VideoLessons() {
   };
 
   useEffect(() => {
-    void performSearch(DEFAULT_QUERY);
+    void performSearch("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -196,10 +192,13 @@ export default function VideoLessons() {
                       </div>
                     ))
                   : results.length > 0
-                  ? results.map((video) => (
-                      <div
-                        key={video.id}
-                        className="group flex flex-col overflow-hidden rounded-3xl border border-border/40 bg-background/95 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
+                  ? results.map((video, index) => (
+                      <a
+                        key={`${video.title}-${index}`}
+                        href={video.youtube_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex flex-col overflow-hidden rounded-3xl border border-border/40 bg-background/95 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg cursor-pointer"
                       >
                         <div className="relative h-48 w-full overflow-hidden">
                           <img
@@ -207,11 +206,6 @@ export default function VideoLessons() {
                             alt={video.title}
                             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                           />
-                          {video.duration && (
-                            <span className="absolute bottom-3 right-3 rounded bg-black/70 px-2 py-0.5 text-xs font-medium text-white">
-                              {video.duration}
-                            </span>
-                          )}
                           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
                         </div>
                         <div className="flex flex-1 flex-col gap-4 p-6">
@@ -219,43 +213,12 @@ export default function VideoLessons() {
                             <h3 className="text-lg font-semibold leading-tight text-foreground">
                               {video.title}
                             </h3>
-                            <a
-                              href={video.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition hover:border-primary/50 hover:text-primary"
-                              aria-label="Open video in a new tab"
-                            >
+                            <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition group-hover:border-primary/50 group-hover:text-primary">
                               <VideoIcon className="h-4 w-4" />
-                            </a>
-                          </div>
-                          {video.description && (
-                            <p className="line-clamp-3 text-sm text-muted-foreground/90">
-                              {video.description}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                            {video.channel && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-3 py-1">
-                                <Play className="h-3 w-3" />
-                                {video.channel}
-                              </span>
-                            )}
-                            {video.published_at && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-3 py-1">
-                                <Calendar className="h-3 w-3" />
-                                {new Date(video.published_at).toLocaleDateString()}
-                              </span>
-                            )}
-                            {video.views && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-3 py-1">
-                                <Clock className="h-3 w-3" />
-                                {new Intl.NumberFormat().format(video.views)} views
-                              </span>
-                            )}
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      </a>
                     ))
                   : (
                       <div className="col-span-1 flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed border-border/70 bg-muted/20 p-12 text-center text-muted-foreground sm:col-span-2">

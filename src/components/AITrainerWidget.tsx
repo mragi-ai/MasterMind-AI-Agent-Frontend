@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Mic, Phone, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { chatAsk } from "@/lib/api/endpoints/agent";
+import { chatAsk, getAssessment } from "@/lib/api/endpoints/agent";
 import useAppStore from "@/zustand";
 import { getUser } from "@/lib/auth";
 
@@ -14,7 +14,15 @@ type Message = {
   role: Role;
   kind: ContentKind;
   text?: string;
-  video?: { src: string; title: string; poster?: string; duration?: string };
+  video?: { 
+    src: string; 
+    title: string; 
+    description?: string;
+    poster?: string; 
+    duration?: string;
+    youtube_url?: string;
+    isYoutube?: boolean;
+  };
   options?: { label: string; value: string }[];
   source?: string;
   ts?: string;
@@ -26,6 +34,49 @@ const generateId = (): string =>
   typeof (crypto as any).randomUUID === "function"
     ? (crypto as any).randomUUID()
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+// Helper function to extract YouTube video ID and convert to embed URL
+const getYouTubeEmbedUrl = (url: string): string | null => {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /youtube\.com\/watch\?.*v=([^&\n?#]+)/,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return `https://www.youtube.com/embed/${match[1]}`;
+    }
+  }
+  return null;
+};
+
+// Helper function to check if URL is YouTube
+const isYouTubeUrl = (url: string): boolean => {
+  return /youtube\.com|youtu\.be/.test(url);
+};
+
+// Helper function to map role to API format
+const mapRoleToApiFormat = (role: string | undefined, title: string | undefined): string => {
+  if (!role && !title) return "customer record";
+  
+  // Map role values to API format if needed
+  const roleMap: Record<string, string> = {
+    "customer_representative": "customer record",
+    "carrier_representative": "carrier record",
+    "agent_manager": "agent manager",
+  };
+  
+  if (role && roleMap[role]) {
+    return roleMap[role];
+  }
+  
+  // If no mapping found, use the role as-is or convert title
+  if (role) return role;
+  if (title) return title.toLowerCase().replace(/\s+/g, " ");
+  
+  return "customer record";
+};
 
 type Props = {
   apiBase?: string;
@@ -232,12 +283,11 @@ export default function AITrainerWidget({
 
     try {
       const res = await chatAsk({
-        question: messageText,
-        // role: selectedRole?.role || "dispatcher",
+        user_id: currentUser?.user_id || "",
+        session_id: sessionId || "",
         role: "dispatcher",
-        ...(sessionId && { session_id: sessionId }),
-        user_id: currentUser?.user_id,
-      } as any);
+        question: messageText,
+      });
 
       // Extract session_id from response if present
       if (res.session_id) {
@@ -247,16 +297,57 @@ export default function AITrainerWidget({
         setSessionId(res.session_id);
       }
 
-      const mapped = (
-        res.messages ||
-        (res.answer ? [{ role: "assistant", content: res.answer }] : [])
-      ).map((rm: any) => ({
-        id: generateId(),
-        role: rm.role,
-        kind: (rm.kind as any) || "text",
-        text: rm.content,
-        ts: new Date().toLocaleTimeString(),
-      }));
+      const mapped: Message[] = [];
+
+      // First, add text answer if present
+      if (res.answer) {
+        mapped.push({
+          id: generateId(),
+          role: "assistant",
+          kind: "text",
+          text: res.answer,
+          ts: new Date().toLocaleTimeString(),
+        });
+      }
+
+      // Process messages if present
+      if (res.messages && Array.isArray(res.messages)) {
+        res.messages.forEach((rm: any) => {
+          mapped.push({
+            id: generateId(),
+            role: rm.role || "assistant",
+            kind: (rm.kind as any) || "text",
+            text: rm.content,
+            ts: new Date().toLocaleTimeString(),
+          });
+        });
+      }
+
+      // Process videos if present
+      if (res.videos && Array.isArray(res.videos) && res.videos.length > 0) {
+        res.videos.forEach((video: any) => {
+          const youtubeUrl = video.youtube_url || video.url || "";
+          const isYoutube = isYouTubeUrl(youtubeUrl);
+          const embedUrl = isYoutube ? getYouTubeEmbedUrl(youtubeUrl) : null;
+
+          mapped.push({
+            id: generateId(),
+            role: "assistant",
+            kind: "video",
+            video: {
+              // Only set src to embed URL if we successfully generated one, otherwise leave empty for clickable card
+              src: embedUrl || (isYoutube ? "" : (youtubeUrl || video.src || "")),
+              title: video.title || "Video",
+              description: video.description,
+              youtube_url: youtubeUrl,
+              isYoutube: isYoutube,
+              poster: video.poster || video.thumbnail_url,
+              duration: video.duration,
+            },
+            ts: new Date().toLocaleTimeString(),
+          });
+        });
+      }
 
       if (mapped.length === 0) {
         mapped.push({
@@ -296,6 +387,90 @@ export default function AITrainerWidget({
         onEscalate();
       }
       pushContactDetails();
+    } else if (value === "question") {
+      // Call assessment API when "Ask a question" is clicked
+      const currentUser = getUser();
+      if (!currentUser?.user_id) {
+        pushMessage({
+          id: generateId(),
+          role: "system",
+          kind: "text",
+          text: "Please log in to ask a question.",
+          ts: new Date().toLocaleTimeString(),
+        });
+        return;
+      }
+
+      if (!sessionId) {
+        pushMessage({
+          id: generateId(),
+          role: "system",
+          kind: "text",
+          text: "Please start a conversation first to get a session ID.",
+          ts: new Date().toLocaleTimeString(),
+        });
+        return;
+      }
+
+      // Get role from selectedRole, mapped to API format
+      const roleValue = mapRoleToApiFormat(selectedRole?.role, selectedRole?.title);
+      
+      setTyping(true);
+      try {
+        const res = await getAssessment({
+          user_id: currentUser.user_id,
+          session_id: sessionId,
+          role: roleValue,
+        });
+
+        // Display the assessment/question response
+        if (res.question) {
+          pushMessage({
+            id: generateId(),
+            role: "assistant",
+            kind: "text",
+            text: res.question,
+            ts: new Date().toLocaleTimeString(),
+          });
+        } else if (res.questions && Array.isArray(res.questions) && res.questions.length > 0) {
+          res.questions.forEach((q: string) => {
+            pushMessage({
+              id: generateId(),
+              role: "assistant",
+              kind: "text",
+              text: q,
+              ts: new Date().toLocaleTimeString(),
+            });
+          });
+        } else if (res.message) {
+          pushMessage({
+            id: generateId(),
+            role: "assistant",
+            kind: "text",
+            text: res.message,
+            ts: new Date().toLocaleTimeString(),
+          });
+        } else {
+          pushMessage({
+            id: generateId(),
+            role: "assistant",
+            kind: "text",
+            text: "I'm ready to answer your questions. What would you like to know?",
+            ts: new Date().toLocaleTimeString(),
+          });
+        }
+      } catch (e: any) {
+        const msg = e?.message || "Failed to get assessment question";
+        pushMessage({
+          id: generateId(),
+          role: "system",
+          kind: "text",
+          text: msg,
+          ts: new Date().toLocaleTimeString(),
+        });
+      } finally {
+        setTyping(false);
+      }
     } else {
       await sendText(label);
     }
@@ -590,40 +765,126 @@ export default function AITrainerWidget({
                     )}
 
                     {m.kind === "video" && m.video && (
-                      <div className="mt-2 rounded-lg overflow-hidden border border-border bg-black">
-                        <video
-                          controls
-                          playsInline
-                          preload="metadata"
-                          poster={m.video.poster}
-                          className="w-full"
-                        >
-                          <source src={m.video.src} type="video/mp4" />
-                          Your browser does not support the video tag.
-                        </video>
-                        <div className="flex gap-2 p-2 bg-card border-t border-border">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1"
-                          >
-                            Replay
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            asChild
-                            className="flex-1"
-                          >
-                            <a
-                              href={m.video.src}
-                              target="_blank"
-                              rel="noreferrer"
+                      <div className="mt-2 space-y-2">
+                        {m.video.isYoutube && m.video.youtube_url ? (
+                          // YouTube video - show embed or clickable card
+                          <div className="rounded-lg overflow-hidden border border-border bg-card">
+                            {m.video.src ? (
+                              // Embedded YouTube video
+                              <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+                                <iframe
+                                  src={`${m.video.src}?rel=0&modestbranding=1`}
+                                  className="absolute top-0 left-0 w-full h-full"
+                                  frameBorder="0"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                  title={m.video.title}
+                                />
+                              </div>
+                            ) : (
+                              // Clickable YouTube card
+                              <a
+                                href={m.video.youtube_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block group"
+                              >
+                                <div className="relative aspect-video bg-black overflow-hidden">
+                                  {m.video.poster ? (
+                                    <img
+                                      src={m.video.poster}
+                                      alt={m.video.title}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-red-600 to-red-800">
+                                      <svg
+                                        className="w-16 h-16 text-white"
+                                        fill="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path d="M10 16.5l6-4.5-6-4.5v9zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
+                                      </svg>
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/20 transition-colors">
+                                    <div className="w-16 h-16 rounded-full bg-red-600/90 group-hover:bg-red-600 flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+                                      <svg
+                                        className="w-8 h-8 text-white ml-1"
+                                        fill="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path d="M8 5v14l11-7z" />
+                                      </svg>
+                                    </div>
+                                  </div>
+                                </div>
+                              </a>
+                            )}
+                            <div className="p-3 bg-card">
+                              <h4 className="font-semibold text-sm mb-1">{m.video.title}</h4>
+                              {m.video.description && (
+                                <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                                  {m.video.description}
+                                </p>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                asChild
+                                className="w-full"
+                              >
+                                <a
+                                  href={m.video.youtube_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  Watch on YouTube
+                                </a>
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          // Regular video
+                          <div className="rounded-lg overflow-hidden border border-border bg-black">
+                            <video
+                              controls
+                              playsInline
+                              preload="metadata"
+                              poster={m.video.poster}
+                              className="w-full"
                             >
-                              Full screen
-                            </a>
-                          </Button>
-                        </div>
+                              <source src={m.video.src} type="video/mp4" />
+                              Your browser does not support the video tag.
+                            </video>
+                            {m.video.title && (
+                              <div className="p-3 bg-card border-t border-border">
+                                <h4 className="font-semibold text-sm mb-1">{m.video.title}</h4>
+                                {m.video.description && (
+                                  <p className="text-xs text-muted-foreground line-clamp-2">
+                                    {m.video.description}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            <div className="flex gap-2 p-2 bg-card border-t border-border">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                asChild
+                                className="flex-1"
+                              >
+                                <a
+                                  href={m.video.src}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  Open in new tab
+                                </a>
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 

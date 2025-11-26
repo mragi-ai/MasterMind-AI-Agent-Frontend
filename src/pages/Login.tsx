@@ -12,7 +12,10 @@ import { useNavigate } from "react-router-dom";
 import { login, loginWithMicrosoft } from "@/lib/api/endpoints/auth";
 import { useToast } from "@/components/ui/use-toast";
 import { saveAuth } from "@/lib/auth";
-import { initializeMsal, loginWithMicrosoft as msalLogin } from "@/lib/auth/msalUtils";
+// import {
+//   initializeMsal,
+//   loginWithMicrosoft as msalLogin,
+// } from "@/lib/auth/msalUtils";
 import { MICROSOFT_CLIENT_ID } from "@/lib/auth/values";
 import { Separator } from "@/components/ui/separator";
 import { Sparkles, ShieldCheck, Clock, GraduationCap } from "lucide-react";
@@ -28,17 +31,20 @@ const featureHighlights: FeatureHighlight[] = [
   {
     icon: Sparkles,
     title: "Role-based journeys",
-    description: "Carrier, customer, and agent personas with curated practice paths.",
+    description:
+      "Carrier, customer, and agent personas with curated practice paths.",
   },
   {
     icon: GraduationCap,
     title: "Guided simulations",
-    description: "Practice live conversations with AI coaches tuned to real scenarios.",
+    description:
+      "Practice live conversations with AI coaches tuned to real scenarios.",
   },
   {
     icon: Clock,
     title: "Progress intelligence",
-    description: "Track mastery scores, unlock certifications, and stay on schedule.",
+    description:
+      "Track mastery scores, unlock certifications, and stay on schedule.",
   },
 ];
 
@@ -53,7 +59,9 @@ const FeatureHighlightCard = ({
         <Icon className="h-5 w-5" />
       </div>
       <div>
-        <p className="text-sm font-semibold tracking-tight text-white/90">{title}</p>
+        <p className="text-sm font-semibold tracking-tight text-white/90">
+          {title}
+        </p>
         <p className="text-xs text-white/70">{description}</p>
       </div>
     </div>
@@ -71,11 +79,11 @@ export default function Login() {
   const { toast } = useToast();
 
   // Initialize MSAL on component mount
-  useEffect(() => {
-    initializeMsal().catch((error) => {
-      console.error("Failed to initialize MSAL:", error);
-    });
-  }, []);
+  // useEffect(() => {
+  //   initializeMsal().catch((error) => {
+  //     console.error("Failed to initialize MSAL:", error);
+  //   });
+  // }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,82 +119,82 @@ export default function Login() {
     }
   };
 
-  const handleMicrosoftLogin = async () => {
-    setMicrosoftSubmitting(true);
-    try {
-      // Check if Azure client ID is configured
-      const clientId = MICROSOFT_CLIENT_ID;
-      if (!clientId) {
-        toast({
-          title: "Configuration Error",
-          description: "Microsoft SSO is not configured. Please contact your administrator.",
-          variant: "destructive",
-        });
-        setMicrosoftSubmitting(false);
-        return;
-      }
+  // const handleMicrosoftLogin = async () => {
+  //   setMicrosoftSubmitting(true);
+  //   try {
+  //     // Check if Azure client ID is configured
+  //     const clientId = MICROSOFT_CLIENT_ID;
+  //     if (!clientId) {
+  //       toast({
+  //         title: "Configuration Error",
+  //         description: "Microsoft SSO is not configured. Please contact your administrator.",
+  //         variant: "destructive",
+  //       });
+  //       setMicrosoftSubmitting(false);
+  //       return;
+  //     }
 
-      // Login with Microsoft using MSAL
-      const msalResponse = await msalLogin();
-      
-      if (!msalResponse) {
-        throw new Error("Microsoft login failed");
-      }
+  //     // Login with Microsoft using MSAL
+  //     const msalResponse = await msalLogin();
 
-      // Extract user info from the token
-      const account = msalResponse.account;
-      const claims = (account?.idTokenClaims ?? {}) as Record<string, unknown>;
-      const emailClaim =
-        typeof claims.preferred_username === "string"
-          ? claims.preferred_username
-          : typeof claims.email === "string"
-          ? claims.email
-          : null;
-      const nameClaim =
-        typeof claims.name === "string" ? claims.name : null;
+  //     if (!msalResponse) {
+  //       throw new Error("Microsoft login failed");
+  //     }
 
-      const email = emailClaim || account?.username || "";
-      const name = nameClaim || account?.name || "";
+  //     // Extract user info from the token
+  //     const account = msalResponse.account;
+  //     const claims = (account?.idTokenClaims ?? {}) as Record<string, unknown>;
+  //     const emailClaim =
+  //       typeof claims.preferred_username === "string"
+  //         ? claims.preferred_username
+  //         : typeof claims.email === "string"
+  //         ? claims.email
+  //         : null;
+  //     const nameClaim =
+  //       typeof claims.name === "string" ? claims.name : null;
 
-      // Send Microsoft token to backend
-      const res = await loginWithMicrosoft({
-        access_token: msalResponse.accessToken,
-        id_token: msalResponse.idToken,
-        email: email,
-        name: name,
-      });
+  //     const email = emailClaim || account?.username || "";
+  //     const name = nameClaim || account?.name || "";
 
-      // Save auth if response contains access_token
-      if (res?.access_token) {
-        saveAuth(
-          {
-            access_token: res.access_token,
-            token_type: res.token_type,
-            user: res.user || {
-              email: email,
-              name: name,
-            },
-          },
-          remember
-        );
-      }
+  //     // Send Microsoft token to backend
+  //     const res = await loginWithMicrosoft({
+  //       access_token: msalResponse.accessToken,
+  //       id_token: msalResponse.idToken,
+  //       email: email,
+  //       name: name,
+  //     });
 
-      toast({
-        title: "Logged in",
-        description: res?.message || "Welcome back!",
-      });
-      navigate("/role-selection");
-    } catch (error: any) {
-      console.error("Microsoft login error:", error);
-      toast({
-        title: "Microsoft login failed",
-        description: error?.message || "Please try again",
-        variant: "destructive",
-      });
-    } finally {
-      setMicrosoftSubmitting(false);
-    }
-  };
+  //     // Save auth if response contains access_token
+  //     if (res?.access_token) {
+  //       saveAuth(
+  //         {
+  //           access_token: res.access_token,
+  //           token_type: res.token_type,
+  //           user: res.user || {
+  //             email: email,
+  //             name: name,
+  //           },
+  //         },
+  //         remember
+  //       );
+  //     }
+
+  //     toast({
+  //       title: "Logged in",
+  //       description: res?.message || "Welcome back!",
+  //     });
+  //     navigate("/role-selection");
+  //   } catch (error: any) {
+  //     console.error("Microsoft login error:", error);
+  //     toast({
+  //       title: "Microsoft login failed",
+  //       description: error?.message || "Please try again",
+  //       variant: "destructive",
+  //     });
+  //   } finally {
+  //     setMicrosoftSubmitting(false);
+  //   }
+  // };
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-50">
@@ -208,7 +216,9 @@ export default function Login() {
             Sign in to unlock role-based AI training
           </h1>
           <p className="mx-auto max-w-xl text-base text-slate-300 sm:text-lg">
-            Develop next-level skills through guided chat simulations, cinematic micro-lessons, and measurable coaching loops built for logistics pros.
+            Develop next-level skills through guided chat simulations, cinematic
+            micro-lessons, and measurable coaching loops built for logistics
+            pros.
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -222,9 +232,12 @@ export default function Login() {
               <ShieldCheck className="h-5 w-5" />
             </div>
             <div className="space-y-1 text-left">
-              <p className="text-sm font-semibold text-white/90">4.9/5 learner satisfaction</p>
+              <p className="text-sm font-semibold text-white/90">
+                4.9/5 learner satisfaction
+              </p>
               <p className="text-xs text-white/70">
-                Teams master live conversations and video-led drills in as little as two weeks.
+                Teams master live conversations and video-led drills in as
+                little as two weeks.
               </p>
             </div>
           </div>
@@ -239,7 +252,8 @@ export default function Login() {
                   Welcome back
                 </CardTitle>
                 <CardDescription className="text-base text-slate-500">
-                  Log in with your company email or continue with Microsoft SSO to resume your training journey.
+                  Log in with your company email or continue with Microsoft SSO
+                  to resume your training journey.
                 </CardDescription>
                 <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-500">
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -251,7 +265,10 @@ export default function Login() {
               <CardContent className="space-y-6">
                 <form onSubmit={handleLogin} className="space-y-5">
                   <div className="space-y-2">
-                    <label htmlFor="email" className="text-sm font-medium text-slate-600">
+                    <label
+                      htmlFor="email"
+                      className="text-sm font-medium text-slate-600"
+                    >
                       Work email
                     </label>
                     <Input
@@ -265,7 +282,10 @@ export default function Login() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="password" className="text-sm font-medium text-slate-600">
+                    <label
+                      htmlFor="password"
+                      className="text-sm font-medium text-slate-600"
+                    >
                       Password
                     </label>
                     <Input
@@ -287,7 +307,10 @@ export default function Login() {
                         checked={remember}
                         onChange={(e) => setRemember(e.target.checked)}
                       />
-                      <label htmlFor="remember" className="text-sm text-slate-500">
+                      <label
+                        htmlFor="remember"
+                        className="text-sm text-slate-500"
+                      >
                         Remember me
                       </label>
                     </div>
@@ -312,62 +335,21 @@ export default function Login() {
                   </Button>
                 </form>
 
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="group relative flex h-12 w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-primary/30 bg-transparent text-base font-semibold text-primary transition-all duration-300 hover:border-primary/50 hover:bg-primary/5"
+                  onClick={() => navigate("/demo-roles")}
+                >
+                  <span className="relative">Try Demo</span>
+                </Button>
+
                 <div className="relative">
                   <Separator className="bg-slate-200" />
                   <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-3 text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
                     Or
                   </span>
                 </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition-all duration-300 hover:border-primary/40 hover:bg-primary/5"
-                  onClick={handleMicrosoftLogin}
-                  disabled={submitting || microsoftSubmitting}
-                >
-                  {microsoftSubmitting ? (
-                    <span className="flex items-center gap-2">
-                      <svg
-                        className="h-5 w-5 animate-spin text-primary"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Signing in...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <svg
-                        width="21"
-                        height="21"
-                        viewBox="0 0 21 21"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <rect x="0.5" y="0.5" width="10" height="10" fill="#F25022" />
-                        <rect x="10.5" y="0.5" width="10" height="10" fill="#7FBA00" />
-                        <rect x="0.5" y="10.5" width="10" height="10" fill="#00A4EF" />
-                        <rect x="10.5" y="10.5" width="10" height="10" fill="#FFB900" />
-                      </svg>
-                      Continue with Microsoft
-                    </span>
-                  )}
-                </Button>
 
                 <p className="text-center text-xs text-slate-400">
                   By logging in you agree to our{" "}
