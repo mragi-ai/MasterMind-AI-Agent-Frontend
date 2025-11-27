@@ -40,4 +40,13 @@ export async function getAssessment(body: AssessmentRequest): Promise<Assessment
   return api.post<AssessmentResponse, AssessmentRequest>("assessment/question", body);
 }
 
+export type DemoAskRequest = {
+  user_id: string;
+  role: string;
+  question: string;
+};
+
+export async function demoAsk(body: DemoAskRequest): Promise<ChatAskResponse> {
+  return api.post<ChatAskResponse, DemoAskRequest>("demo/ask", body);
+}
 
