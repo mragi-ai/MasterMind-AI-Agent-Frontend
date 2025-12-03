@@ -1,10 +1,12 @@
 import { useEffect, useState, FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Search,
   Video as VideoIcon,
+  Play,
 } from "lucide-react";
 import useAppStore from "@/zustand";
 import { searchVideos, type VideoSearchResult } from "@/lib/api/endpoints/videos";
@@ -19,6 +21,7 @@ const trendingQueries = [
 ];
 
 export default function VideoLessons() {
+  const navigate = useNavigate();
   const selectedRole = useAppStore((state) => state.selectedRole);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<VideoSearchResult[]>([]);
@@ -56,6 +59,22 @@ export default function VideoLessons() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await performSearch(query);
+  };
+
+  const handleVideoClick = (video: VideoSearchResult) => {
+    const videoId = extractVideoId(video.youtube_url);
+    if (videoId) {
+      navigate(
+        `/video-viewer?v=${videoId}&url=${encodeURIComponent(
+          video.youtube_url
+        )}&title=${encodeURIComponent(video.title)}`
+      );
+    }
+  };
+
+  const extractVideoId = (url: string): string | null => {
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
+    return match ? match[1] : null;
   };
 
   return (
@@ -193,11 +212,9 @@ export default function VideoLessons() {
                     ))
                   : results.length > 0
                   ? results.map((video, index) => (
-                      <a
+                      <div
                         key={`${video.title}-${index}`}
-                        href={video.youtube_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        onClick={() => handleVideoClick(video)}
                         className="group flex flex-col overflow-hidden rounded-3xl border border-border/40 bg-background/95 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg cursor-pointer"
                       >
                         <div className="relative h-48 w-full overflow-hidden">
@@ -207,6 +224,11 @@ export default function VideoLessons() {
                             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                           />
                           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/90 text-white shadow-lg backdrop-blur-sm">
+                              <Play className="h-8 w-8 ml-1" fill="currentColor" />
+                            </div>
+                          </div>
                         </div>
                         <div className="flex flex-1 flex-col gap-4 p-6">
                           <div className="flex items-start justify-between gap-3">
@@ -217,8 +239,13 @@ export default function VideoLessons() {
                               <VideoIcon className="h-4 w-4" />
                             </div>
                           </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Badge variant="secondary" className="text-xs">
+                              Watch with transcript
+                            </Badge>
+                          </div>
                         </div>
-                      </a>
+                      </div>
                     ))
                   : (
                       <div className="col-span-1 flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed border-border/70 bg-muted/20 p-12 text-center text-muted-foreground sm:col-span-2">

@@ -11,9 +11,11 @@ import ResetPassword from "./pages/ResetPassword";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { isAuthenticated } from "@/lib/auth";
 import VideoLessons from "./pages/VideoLessons";
+import VideoViewer from "./pages/VideoViewer";
 import DemoRoles from "./pages/DemoRoles";
 import DemoChat from "./pages/DemoChat";
 import DemoCall from "./pages/DemoCall";
+import UserProfile from "./pages/UserProfile";
 
 const App = () => (
   <TooltipProvider>
@@ -47,6 +49,14 @@ const App = () => (
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/video-viewer"
+          element={
+            <ProtectedRoute>
+              <VideoViewer />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route
           path="/role-selection"
@@ -60,6 +70,14 @@ const App = () => (
         <Route path="/demo-roles" element={<DemoRoles />} />
         <Route path="/demo-chat" element={<DemoChat />} />
         <Route path="/demo-call" element={<DemoCall />} />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <UserProfile />
+            </ProtectedRoute>
+          }
+        />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
