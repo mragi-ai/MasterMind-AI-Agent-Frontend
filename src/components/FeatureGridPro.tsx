@@ -1,4 +1,4 @@
-import { useState, useRef, MouseEvent } from "react";
+import { useState, MouseEvent } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +16,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useNavigate } from "react-router-dom";
 import useAppStore from "@/zustand";
+import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
 
 type Feature = {
   id: string;
@@ -33,70 +34,70 @@ const features: Feature[] = [
   {
     id: "chat",
     icon: MessageSquare,
-    title: "Chat & Voice",
+    title: "Chat Simulations",
     description:
-      "Type your question or use push-to-talk for hands-free help. Get instant answers from our AI.",
-    metric: "24/7 Available",
-    prompt: "How can I help you today?",
+      "Role-play real conversations with AI coaches that adapt to your persona and give instant feedback.",
+    metric: "Live Coaching",
+    prompt: "Start a coaching simulation for my role.",
     color: "primary",
   },
   {
     id: "video",
     icon: Video,
-    title: "Video Walkthroughs",
+    title: "Video Lessons",
     description:
-      "Watch step-by-step video guides tailored to your question. Learn by seeing it done.",
-    metric: "230+ Videos",
-    prompt: "Show me tutorial videos",
+      "Stream cinematic walkthroughs and micro-trainings that mirror the scenarios you face every day.",
+    metric: "200+ Lessons",
+    prompt: "Recommend a video lesson for my next milestone.",
     color: "accent",
   },
   {
     id: "quick",
     icon: Zap,
-    title: "Quick Actions",
+    title: "Practice Modes",
     description:
-      "Use smart quick-reply buttons to navigate common workflows faster than typing.",
-    metric: "50+ Shortcuts",
-    prompt: "What quick actions are available?",
+      "Switch between guided drills, timed reps, or sandbox practice to sharpen skills at your pace.",
+    metric: "3 Modes",
+    prompt: "What practice modes should I use today?",
     color: "accent",
   },
   {
     id: "escalate",
     icon: Phone,
-    title: "Escalate Anytime",
+    title: "Mentor Escalation",
     description:
-      "Need a human? One click connects you to a specialist with full conversation context.",
-    metric: "<3 min wait",
-    prompt: "Connect me with a specialist",
+      "Request a human coach when you need deeper guidance—AI shares your progress and notes instantly.",
+    metric: "Under 3 min",
+    prompt: "Connect me with a mentor for this scenario.",
     color: "primary",
   },
   {
     id: "source",
     icon: BookOpen,
-    title: "Source Citations",
+    title: "Playbook Library",
     description:
-      "Every answer includes the source document or SOP version for transparency and trust.",
-    metric: "100% Traced",
-    prompt: "Show me your sources",
+      "Access playbooks, SOPs, and scripts aligned with your role and new certifications.",
+    metric: "Always Current",
+    prompt: "Show me the latest playbooks for my persona.",
     color: "primary",
   },
   {
     id: "accessible",
     icon: Headphones,
-    title: "Fully Accessible",
+    title: "Accessible Training",
     description:
-      "WCAG 2.2 AA compliant, keyboard-first navigation, and screen reader optimized.",
-    metric: "AA Certified",
-    prompt: "Tell me about accessibility features",
+      "Keyboard-first navigation, captions, and audio descriptions keep every learner in the loop.",
+    metric: "WCAG 2.2 AA",
+    prompt: "Tell me about accessibility options for training.",
     color: "accent",
   },
 ];
 
 export default function FeatureGridPro() {
-  const [hoveredFeature, setHoveredFeature] = useState<string | null>(null);
+  const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogType, setDialogType] = useState<"comingSoon" | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
-  const featureRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const selectedRole = useAppStore((state) => state.selectedRole);
 
   const handleTryIt = (feature: Feature, e: MouseEvent) => {
@@ -107,8 +108,11 @@ export default function FeatureGridPro() {
           detail: { prompt: feature.prompt },
         })
       );
+    } else if (feature.id === "video") {
+      navigate("/video-lessons");
     } else {
       setSelectedFeature(feature);
+      setDialogType("comingSoon");
       setDialogOpen(true);
     }
   };
@@ -125,10 +129,10 @@ export default function FeatureGridPro() {
           </span>
         </div>
         <h2 className="text-4xl font-bold mb-4 gradient-text">
-          Powerful Features
+          Training Capabilities
         </h2>
         <p className="text-xl text-muted-foreground">
-          Everything you need for seamless training
+          Blend simulations, lessons, and live coaching in one workspace
         </p>
       </div>
 
@@ -172,78 +176,73 @@ export default function FeatureGridPro() {
         })}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md overflow-hidden bg-gradient-to-br from-background via-background/95 to-background">
-          {/* Decorative elements */}
-          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-lg">
-            <div className="absolute -top-20 -left-20 w-40 h-40 bg-primary/10 rounded-full blur-3xl animate-pulse" />
-            <div className="absolute -bottom-20 -right-20 w-40 h-40 bg-accent/10 rounded-full blur-3xl animate-pulse delay-700" />
-          </div>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(isOpen) => {
+          setDialogOpen(isOpen);
+          if (!isOpen) {
+            setDialogType(null);
+            setSelectedFeature(null);
+          }
+        }}
+      >
+        <DialogContent
+          className={cn(
+            "overflow-hidden bg-gradient-to-br from-background via-background/95 to-background",
+            "sm:max-w-md"
+          )}
+        >
+          {dialogType === "comingSoon" && (
+            <div className="relative z-10">
+              <DialogHeader className="space-y-4">
+                <div className="bg-primary/10 w-fit mx-auto px-3 py-1 rounded-full">
+                  <span className="text-primary text-sm font-medium animate-pulse">
+                    Coming Soon!
+                  </span>
+                </div>
+                <DialogTitle className="text-2xl font-bold text-center bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
+                  {selectedFeature?.title}
+                </DialogTitle>
+                <DialogDescription className="text-center">
+                  <p className="text-lg text-foreground/90 mb-2">
+                    We're working hard to bring you something amazing!
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    This feature is currently in development and will be available soon.
+                  </p>
+                </DialogDescription>
+              </DialogHeader>
 
-          <DialogHeader className="relative z-10 space-y-4">
-            <div className="bg-primary/10 w-fit mx-auto px-3 py-1 rounded-full">
-              <span className="text-primary text-sm font-medium animate-pulse">
-                Coming Soon!
-              </span>
-            </div>
-            <DialogTitle className="text-2xl font-bold text-center bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
-              {selectedFeature?.title}
-            </DialogTitle>
-            <DialogDescription className="text-center">
-              <p className="text-lg text-foreground/90 mb-2">
-                We're working hard to bring you something amazing!
-              </p>
-              <p className="text-sm text-muted-foreground">
-                This feature is currently in development and will be available
-                soon.
-              </p>
-            </DialogDescription>
-          </DialogHeader>
+              <div className="mt-6 space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Development Progress</span>
+                    <span className="text-primary font-medium">75%</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full w-[75%] bg-gradient-to-r from-primary to-accent rounded-full animate-pulse" />
+                  </div>
+                </div>
 
-          <div className="mt-6 space-y-4 relative z-10">
-            {/* Progress indicator */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">
-                  Development Progress
-                </span>
-                <span className="text-primary font-medium">75%</span>
+                <div className="p-4 bg-muted/50 rounded-lg border border-border">
+                  <p className="text-sm text-center text-muted-foreground">
+                    Currently available for {selectedRole?.title}s:{" "}
+                    <span className="text-foreground font-medium">Chat & Voice feature</span>
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    variant="default"
+                    className="sm:flex-1"
+                    onClick={() => setDialogOpen(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
               </div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full w-[75%] bg-gradient-to-r from-primary to-accent rounded-full animate-pulse" />
-              </div>
             </div>
-
-            <div className="p-4 bg-muted/50 rounded-lg border border-border">
-              <p className="text-sm text-center text-muted-foreground">
-                Currently available for {selectedRole?.title}s:{" "}
-                <span className="text-foreground font-medium">
-                  Chat & Voice feature
-                </span>
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2">
-              {/* <Button
-                variant="outline"
-                className="sm:flex-1 group"
-                onClick={() => {
-                  setDialogOpen(false);
-                  window.dispatchEvent(new CustomEvent("open-ai-trainer"));
-                }}
-              >
-                <MessageSquare className="w-4 h-4 mr-2 group-hover:text-primary transition-colors" />
-                Try Chat Instead
-              </Button> */}
-              <Button
-                variant="default"
-                className="sm:flex-1"
-                onClick={() => setDialogOpen(false)}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </section>

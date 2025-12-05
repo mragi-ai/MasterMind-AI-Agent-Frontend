@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { User, Mail, LogOut } from "lucide-react";
+import { User, Mail, LogOut, UserCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface UserMenuProps {
@@ -21,6 +21,10 @@ export function UserMenu({ onLogout, userName = "User" }: UserMenuProps) {
   const handleContactUs = () => {
     // You can replace this with your contact page route
     window.location.href = "mailto:support@mastermind.ai";
+  };
+
+  const handleViewProfile = () => {
+    navigate("/profile");
   };
 
   return (
@@ -37,6 +41,13 @@ export function UserMenu({ onLogout, userName = "User" }: UserMenuProps) {
           </div>
         </div>
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="cursor-pointer flex items-center"
+          onClick={handleViewProfile}
+        >
+          <UserCircle className="mr-2 h-4 w-4" />
+          <span>View Profile</span>
+        </DropdownMenuItem>
         <DropdownMenuItem
           className="cursor-pointer flex items-center"
           onClick={handleContactUs}

@@ -14,8 +14,11 @@ import {
   Truck,
   Headset,
   ShieldCheck,
-  CheckCircle2,
   Sparkles,
+  User,
+  Briefcase,
+  MessageSquare,
+  Phone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import useAppStore from "@/zustand";
@@ -29,7 +32,8 @@ type Role = {
   role?: string;
 };
 
-const roles: Role[] = [
+// Predefined demo roles
+const demoRoles: Role[] = [
   {
     id: 1,
     title: "Carrier Representative",
@@ -57,27 +61,44 @@ const roles: Role[] = [
     color: "accent",
     role: "agent_manager",
   },
+  {
+    id: 4,
+    title: "Dispatcher",
+    description:
+      "Manage daily operations, coordinate shipments, and ensure timely deliveries.",
+    icon: Briefcase,
+    color: "primary",
+    role: "dispatcher",
+  },
+  {
+    id: 5,
+    title: "Customer Service Agent",
+    description:
+      "Handle customer inquiries, provide support, and maintain customer satisfaction.",
+    icon: MessageSquare,
+    color: "accent",
+    role: "customer_service_agent",
+  },
+  {
+    id: 6,
+    title: "Operations Coordinator",
+    description:
+      "Streamline logistics operations, optimize routes, and manage resources efficiently.",
+    icon: User,
+    color: "primary",
+    role: "operations_coordinator",
+  },
 ];
 
-export default function RoleSelection() {
+export default function DemoRoles() {
   const navigate = useNavigate();
   const isMobile = useMediaQuery("(max-width: 768px)");
-  const storedRole = useAppStore((state) => state.selectedRole);
-  const [selectedRole, setSelectedRole] = useState<number | null>(
-    storedRole?.id || null
-  );
+  const [selectedRole, setSelectedRole] = useState<number | null>(null);
 
   const handleRoleSelect = (roleId: number) => {
     setSelectedRole(roleId);
   };
 
-  const handleStartChatting = () => {
-    if (selectedRole) {
-      const selectedRoleData = roles.find((r) => r.id === selectedRole);
-      useAppStore.getState().setSelectedRole(selectedRoleData);
-      navigate("/dashboard");
-    }
-  };
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_rgba(10,10,10,0))]">
@@ -99,39 +120,29 @@ export default function RoleSelection() {
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-2 text-primary shadow-[0_0_32px_rgba(14,165,233,0.15)]">
               <Sparkles className="h-4 w-4" />
               <span className="text-sm font-medium uppercase tracking-wider">
-                Select Your Training Persona
+                Try Demo - Select a Role
               </span>
             </div>
 
             <div className="space-y-5">
               <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-                Tailored Learning Journeys for Every Logistics Pro
+                Explore AI Training with Predefined Roles
               </h1>
               <p className="text-lg leading-relaxed text-muted-foreground">
-                Choose the role that mirrors your responsibilities so we can
-                curate role-based simulations, guided chat practice, and
-                on-demand video lessons.
+                Choose a role to experience our AI training assistant. Each role
+                comes with tailored conversations and scenarios designed for
+                that specific position.
               </p>
             </div>
 
-            <div className="grid gap-5">
-              {[
-                "Practice real conversations with AI coaches tuned to your role.",
-                "Watch micro-trainings and scenario breakdowns chosen for you.",
-                "Track mastery with live scorecards and certification checkpoints.",
-              ].map((item) => (
-                <div
-                  key={item}
-                  className="group flex items-center gap-3 rounded-xl border border-border/60 bg-background/80 px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.1)] backdrop-blur transition hover:border-primary/40 hover:shadow-[0_16px_40px_rgba(14,165,233,0.15)]"
-                >
-                  <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <CheckCircle2 className="h-4 w-4" />
-                  </span>
-                  <p className="text-sm font-medium text-foreground/90">
-                    {item}
-                  </p>
-                </div>
-              ))}
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6">
+              <p className="text-sm font-medium text-primary mb-2">
+                🎯 Demo Mode Active
+              </p>
+              <p className="text-sm text-muted-foreground">
+                You're exploring in demo mode. Select any role below to start a
+                conversation with our AI training assistant.
+              </p>
             </div>
           </section>
 
@@ -139,19 +150,19 @@ export default function RoleSelection() {
             <header className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-medium uppercase tracking-wider text-primary">
-                  Persona Library
+                  Demo Roles
                 </p>
                 <h2 className="text-2xl font-semibold">
-                  Preview the learning plan aligned to your daily outcomes.
+                  Select a role and choose Chat or Call
                 </h2>
               </div>
               <div className="rounded-full border border-border/80 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                3 Curated Tracks
+                {demoRoles.length} Roles
               </div>
             </header>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {roles.map((role) => {
+            <div className="grid gap-4 md:grid-cols-2">
+              {demoRoles.map((role) => {
                 const isSelected = selectedRole === role.id;
                 const Icon = role.icon;
 
@@ -187,46 +198,62 @@ export default function RoleSelection() {
                       </div>
                     </CardHeader>
                     <CardContent className="flex-1" />
-                    <CardFooter className="pt-0">
-                      <Button
-                        variant={isSelected ? "default" : "outline"}
-                        className={cn(
-                          "w-full transition",
-                          !isSelected &&
-                            "border-border/60 bg-background/80 text-foreground hover:border-primary/50 hover:text-primary"
-                        )}
-                        size={isMobile ? "lg" : "default"}
-                      >
-                        {isSelected ? "Selected Track" : "Preview Training"}
-                      </Button>
+                    <CardFooter className="pt-0 flex flex-col gap-2">
+                      <div className="flex gap-2 w-full">
+                        <Button
+                          variant="default"
+                          className="flex-1 transition gap-2 bg-primary hover:bg-primary/90"
+                          size={isMobile ? "lg" : "default"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const roleData = demoRoles.find((r) => r.id === role.id);
+                            if (roleData) {
+                              useAppStore.getState().setSelectedRole(roleData);
+                              navigate("/demo-chat");
+                            }
+                          }}
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          Chat
+                        </Button>
+                        <Button
+                          variant="default"
+                          className="flex-1 transition gap-2 bg-accent hover:bg-accent/90"
+                          size={isMobile ? "lg" : "default"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const roleData = demoRoles.find((r) => r.id === role.id);
+                            if (roleData) {
+                              useAppStore.getState().setSelectedRole(roleData);
+                              navigate("/demo-call");
+                            }
+                          }}
+                        >
+                          <Phone className="h-4 w-4" />
+                          Call
+                        </Button>
+                      </div>
                     </CardFooter>
                   </Card>
                 );
               })}
             </div>
 
-            <footer className="flex flex-col gap-4 rounded-2xl border border-dashed border-primary/30 bg-primary/5 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
+            <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 px-6 py-5">
+              <div className="space-y-2 text-center">
                 <p className="text-sm font-semibold text-primary">
-                  Need more customization?
+                  Choose Your Interaction Method
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Start with the closest track. You can personalize lesson
-                  sequences, skill goals, and practice scenarios anytime.
+                  Click "Chat" for text-based conversations or "Call" for voice
+                  interactions. Both options are available for each role.
                 </p>
               </div>
-              <Button
-                size="lg"
-                className="min-w-[12rem] shadow-lg hover:shadow-xl"
-                onClick={handleStartChatting}
-                disabled={!selectedRole}
-              >
-                Enter Training Hub
-              </Button>
-            </footer>
+            </div>
           </section>
         </div>
       </div>
     </div>
   );
 }
+
