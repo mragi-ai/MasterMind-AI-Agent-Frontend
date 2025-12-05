@@ -4,7 +4,7 @@ import axios, { AxiosError, AxiosInstance } from "axios";
 // const baseURL = serverURL ? `${serverURL}/api/v1/` : "/api/v1/";
 
 // const baseURL = "http://192.168.3.230:3000/api/v1/";
-const baseURL = "https://fireless-axel-agnostically.ngrok-free.dev/api/v1/";
+const baseURL = " https://fireless-axel-agnostically.ngrok-free.dev/api/v1/";
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL,

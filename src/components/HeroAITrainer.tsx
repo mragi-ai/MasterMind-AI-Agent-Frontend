@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Phone, PlayCircle } from "lucide-react";
+import { MessageSquare, Phone } from "lucide-react";
 import evansLogo from "@/assets/evans-logo.png";
 import useAppStore from "@/zustand";
 import masteryLogo from "@/assets/mastery-logo.png";
@@ -16,9 +16,9 @@ export default function HeroAITrainer() {
 
   // Prompt examples for each role
   const rolePrompts: Record<string, string> = {
-    "Carrier Representative": "Coach me through a detention update call with a carrier.",
-    "Customer Representative": "Help me prepare a proactive shipment status recap for my customer.",
-    "Agent Manager": "Walk me through a five-minute coaching huddle agenda.",
+    Dispatcher: "How do I track a container in real-time?",
+    Billing: "How do I create a billing dispute ticket?",
+    "Customer Service": "How do I handle a customer escalation?",
   };
 
   const handleLogout = () => {
@@ -32,8 +32,8 @@ export default function HeroAITrainer() {
     return null;
   }
   const currentPrompt =
-    rolePrompts[selectedRole?.title || "Carrier Representative"] ||
-    "Show me how to practice my next scenario.";
+    rolePrompts[selectedRole?.title || "Dispatcher"] ||
+    "How do I track a container in real-time?";
 
   // Typing animation effect
   useEffect(() => {
@@ -143,8 +143,8 @@ export default function HeroAITrainer() {
             </div>
 
             <p className="text-lg text-muted-foreground leading-relaxed">
-              Run live simulations, rehearse conversations, and unlock video
-              lessons curated for your training persona.
+              Chat with AI, watch step-by-step videos, or connect with a
+              specialist — all personalized for your role.
             </p>
 
             <div className="flex flex-wrap gap-4 pt-4">
@@ -154,16 +154,7 @@ export default function HeroAITrainer() {
                 onClick={() => openChat()}
               >
                 <MessageSquare className="h-5 w-5" />
-                Start Simulation
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="gap-2 text-lg px-8 py-6"
-                onClick={() => openChat("Recommend a video lesson for my next milestone.")}
-              >
-                <PlayCircle className="h-5 w-5" />
-                Watch Lesson
+                Start Chatting
               </Button>
             </div>
           </div>
