@@ -741,7 +741,7 @@ export default function AITrainerWidget({
               {ariaLive}
             </div>
 
-            <div className="relative z-10">
+            <div className="relative z-10 space-y-4">
               {messages.map((m) => (
                 <div
                   key={m.id}

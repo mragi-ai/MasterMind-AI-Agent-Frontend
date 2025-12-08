@@ -13,7 +13,21 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const WEBSOCKET_URL = "ws://192.168.3.199:3000/media-stream";
+// AG2 Client WebSocket URL
+// Using your original server address - update this to match your AG2 server location
+const WEBSOCKET_URL = "ws://192.168.3.199:5050/media-stream";
+
+// Extend the Window interface to include ag2client
+declare global {
+  interface Window {
+    ag2client?: {
+      WebsocketAudio: new (url: string) => {
+        start: () => Promise<void>;
+        stop: () => void;
+      };
+    };
+  }
+}
 
 export default function DemoCall() {
   const navigate = useNavigate();
@@ -25,19 +39,9 @@ export default function DemoCall() {
   const [connectionStatus, setConnectionStatus] = useState<
     "disconnected" | "connecting" | "connected" | "error"
   >("disconnected");
-  const phoneNumber = "+14073070855";
 
-  // WebSocket and Media Refs
-  const wsRef = useRef<WebSocket | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const audioElementRef = useRef<HTMLAudioElement | null>(null);
-  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
-  const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
-  const isSpeakerOnRef = useRef<boolean>(true);
-  const isMutedRef = useRef<boolean>(false);
+  // AG2 Client Ref
+  const audioClientRef = useRef<any>(null);
 
   // If no role is selected, redirect to demo roles page
   useEffect(() => {
@@ -62,388 +66,15 @@ export default function DemoCall() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (isCallActive) {
-        cleanup();
-      }
-    };
-  }, [isCallActive]);
-
-  // Helper function to convert Float32Array to PCM16
-  const float32ToPCM16 = (float32Array: Float32Array): Int16Array => {
-    const pcm16 = new Int16Array(float32Array.length);
-    for (let i = 0; i < float32Array.length; i++) {
-      // Clamp values to [-1, 1] and convert to 16-bit PCM
-      const s = Math.max(-1, Math.min(1, float32Array[i]));
-      pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-    }
-    return pcm16;
-  };
-
-  // Helper function to resample audio
-  const resampleAudio = (
-    audioData: Float32Array,
-    sourceSampleRate: number,
-    targetSampleRate: number
-  ): Float32Array => {
-    if (sourceSampleRate === targetSampleRate) {
-      return audioData;
-    }
-
-    const ratio = sourceSampleRate / targetSampleRate;
-    const newLength = Math.round(audioData.length / ratio);
-    const result = new Float32Array(newLength);
-
-    for (let i = 0; i < newLength; i++) {
-      const sourceIndex = i * ratio;
-      const index = Math.floor(sourceIndex);
-      const fraction = sourceIndex - index;
-
-      if (index + 1 < audioData.length) {
-        // Linear interpolation
-        result[i] =
-          audioData[index] * (1 - fraction) + audioData[index + 1] * fraction;
-      } else {
-        result[i] = audioData[index];
-      }
-    }
-
-    return result;
-  };
-
-  // Helper function to convert audio to base64 PCM16
-  const audioToBase64PCM16 = (
-    audioData: Float32Array,
-    sampleRate: number
-  ): string => {
-    // Resample to 24kHz if needed
-    const resampled = resampleAudio(audioData, sampleRate, 24000);
-
-    // Convert to PCM16
-    const pcm16 = float32ToPCM16(resampled);
-
-    // Convert to base64
-    const bytes = new Uint8Array(pcm16.buffer);
-    let binary = "";
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
-  };
-
-  // Initialize audio context and WebSocket connection
-  const initializeAudioContext = async () => {
-    try {
-      // Create AudioContext for playback (using 24kHz to match server expectations)
-      const AudioContextClass =
-        window.AudioContext || (window as any).webkitAudioContext;
-      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
-
-      // Create audio element for playback
-      if (!audioElementRef.current) {
-        audioElementRef.current = new Audio();
-        audioElementRef.current.autoplay = true;
-      }
-
-      // Get user media (microphone)
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1, // Mono audio
-          sampleRate: 24000, // Request 24kHz sample rate
-        },
-      });
-
-      mediaStreamRef.current = stream;
-
-      // Create source node for microphone input
-      if (audioContextRef.current) {
-        sourceNodeRef.current =
-          audioContextRef.current.createMediaStreamSource(stream);
-        gainNodeRef.current = audioContextRef.current.createGain();
-
-        // Create ScriptProcessorNode for processing audio data
-        const bufferSize = 4096; // Process in chunks
-        processorNodeRef.current =
-          audioContextRef.current.createScriptProcessor(bufferSize, 1, 1);
-
-        // Process audio data
-        processorNodeRef.current.onaudioprocess = (event) => {
-          if (
-            wsRef.current?.readyState === WebSocket.OPEN &&
-            gainNodeRef.current
-          ) {
-            // Check mute state
-            const isCurrentlyMuted = gainNodeRef.current.gain.value === 0;
-            if (!isCurrentlyMuted) {
-              const inputData = event.inputBuffer.getChannelData(0);
-              const sampleRate = event.inputBuffer.sampleRate;
-
-              // Convert to base64 PCM16
-              const base64Audio = audioToBase64PCM16(inputData, sampleRate);
-
-              // Send audio event to server
-              const audioEvent = {
-                type: "input_audio_buffer.append",
-                audio: base64Audio,
-              };
-
-              wsRef.current.send(JSON.stringify(audioEvent));
-            }
-          }
-        };
-
-        // Connect nodes
-        sourceNodeRef.current.connect(gainNodeRef.current);
-        gainNodeRef.current.connect(processorNodeRef.current);
-        processorNodeRef.current.connect(audioContextRef.current.destination);
-
-        // Control mute state
-        if (gainNodeRef.current) {
-          gainNodeRef.current.gain.value = isMuted ? 0 : 1;
+      if (audioClientRef.current) {
+        try {
+          audioClientRef.current.stop();
+        } catch (error) {
+          console.error("Error stopping AG2 client on unmount:", error);
         }
       }
-
-      return true;
-    } catch (error) {
-      console.error("Error initializing audio:", error);
-      setConnectionStatus("error");
-      return false;
-    }
-  };
-
-  const initializeWebSocket = () => {
-    return new Promise<boolean>((resolve) => {
-      try {
-        setConnectionStatus("connecting");
-        const ws = new WebSocket(WEBSOCKET_URL);
-
-        ws.onopen = () => {
-          console.log("WebSocket connected");
-          setConnectionStatus("connected");
-          wsRef.current = ws;
-          resolve(true);
-        };
-
-        ws.onmessage = async (event) => {
-          try {
-            if (typeof event.data === "string") {
-              // Handle text/JSON messages
-              try {
-                const message = JSON.parse(event.data);
-                console.log("WebSocket message:", message);
-
-                // Handle different event types
-                if (message.type === "session.created") {
-                  console.log("Session created successfully");
-                } else if (message.type === "session.updated") {
-                  console.log("Session updated");
-                } else if (message.type === "response.audio.delta") {
-                  // Handle audio delta from server
-                  if (message.delta && audioContextRef.current) {
-                    const base64Audio = message.delta;
-                    const binaryString = atob(base64Audio);
-                    const bytes = new Uint8Array(binaryString.length);
-                    for (let i = 0; i < binaryString.length; i++) {
-                      bytes[i] = binaryString.charCodeAt(i);
-                    }
-
-                    // Convert PCM16 to audio buffer
-                    const pcm16 = new Int16Array(bytes.buffer);
-                    const float32 = new Float32Array(pcm16.length);
-                    for (let i = 0; i < pcm16.length; i++) {
-                      float32[i] =
-                        pcm16[i] < 0 ? pcm16[i] / 0x8000 : pcm16[i] / 0x7fff;
-                    }
-
-                    // Create audio buffer and play
-                    const audioBuffer =
-                      audioContextRef.current.createBuffer(1, float32.length, 24000);
-                    audioBuffer.getChannelData(0).set(float32);
-
-                    const source = audioContextRef.current.createBufferSource();
-                    source.buffer = audioBuffer;
-
-                    const gainNode = audioContextRef.current.createGain();
-                    gainNode.gain.value = isSpeakerOnRef.current ? 1 : 0;
-
-                    source.connect(gainNode);
-                    gainNode.connect(audioContextRef.current.destination);
-                    source.start();
-                  }
-                } else if (message.type === "response.audio") {
-                  // Handle complete audio response
-                  if (message.audio) {
-                    playBase64Audio(message.audio);
-                  }
-                } else if (message.type === "error") {
-                  console.error("Server error:", message.error || message.raw);
-                }
-              } catch (parseError) {
-                console.log("WebSocket text message:", event.data);
-              }
-            } else if (event.data instanceof Blob) {
-              // Handle binary blob data
-              const arrayBuffer = await event.data.arrayBuffer();
-              playPCM16Audio(arrayBuffer);
-            } else if (event.data instanceof ArrayBuffer) {
-              // Handle ArrayBuffer audio data
-              playPCM16Audio(event.data);
-            }
-          } catch (error) {
-            console.error("Error handling WebSocket message:", error);
-          }
-        };
-
-        ws.onerror = (error) => {
-          console.error("WebSocket error:", error);
-          setConnectionStatus("error");
-          resolve(false);
-        };
-
-        ws.onclose = (event) => {
-          console.log("WebSocket closed:", event.code, event.reason);
-          setConnectionStatus("disconnected");
-          wsRef.current = null;
-
-          // Attempt to reconnect if call is still active
-          if (isCallActive && event.code !== 1000) {
-            setTimeout(() => {
-              if (isCallActive) {
-                initializeWebSocket();
-              }
-            }, 3000);
-          }
-        };
-      } catch (error) {
-        console.error("Error creating WebSocket:", error);
-        setConnectionStatus("error");
-        resolve(false);
-      }
-    });
-  };
-
-  const playBase64Audio = async (base64Audio: string) => {
-    try {
-      if (!audioContextRef.current) return;
-
-      const binaryString = atob(base64Audio);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-
-      // Convert PCM16 to Float32
-      const pcm16 = new Int16Array(bytes.buffer);
-      const float32 = new Float32Array(pcm16.length);
-      for (let i = 0; i < pcm16.length; i++) {
-        float32[i] = pcm16[i] < 0 ? pcm16[i] / 0x8000 : pcm16[i] / 0x7fff;
-      }
-
-      // Create and play audio buffer
-      const audioBuffer = audioContextRef.current.createBuffer(
-        1,
-        float32.length,
-        24000
-      );
-      audioBuffer.getChannelData(0).set(float32);
-
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-
-      const gainNode = audioContextRef.current.createGain();
-      gainNode.gain.value = isSpeakerOnRef.current ? 1 : 0;
-
-      source.connect(gainNode);
-      gainNode.connect(audioContextRef.current.destination);
-      source.start();
-    } catch (error) {
-      console.error("Error playing base64 audio:", error);
-    }
-  };
-
-  const playPCM16Audio = async (arrayBuffer: ArrayBuffer) => {
-    try {
-      if (!audioContextRef.current) return;
-
-      const pcm16 = new Int16Array(arrayBuffer);
-      const float32 = new Float32Array(pcm16.length);
-
-      for (let i = 0; i < pcm16.length; i++) {
-        float32[i] = pcm16[i] < 0 ? pcm16[i] / 0x8000 : pcm16[i] / 0x7fff;
-      }
-
-      const audioBuffer = audioContextRef.current.createBuffer(
-        1,
-        float32.length,
-        24000
-      );
-      audioBuffer.getChannelData(0).set(float32);
-
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-
-      const gainNode = audioContextRef.current.createGain();
-      gainNode.gain.value = isSpeakerOnRef.current ? 1 : 0;
-
-      source.connect(gainNode);
-      gainNode.connect(audioContextRef.current.destination);
-      source.start();
-    } catch (error) {
-      console.error("Error playing PCM16 audio:", error);
-    }
-  };
-
-  const cleanup = () => {
-    // Disconnect processor node
-    if (processorNodeRef.current) {
-      processorNodeRef.current.disconnect();
-      processorNodeRef.current.onaudioprocess = null;
-      processorNodeRef.current = null;
-    }
-
-    // Stop media stream tracks
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => {
-        track.stop();
-      });
-      mediaStreamRef.current = null;
-    }
-
-    // Close WebSocket
-    if (wsRef.current) {
-      wsRef.current.close(1000, "Call ended");
-      wsRef.current = null;
-    }
-
-    // Clean up audio nodes
-    if (sourceNodeRef.current) {
-      sourceNodeRef.current.disconnect();
-      sourceNodeRef.current = null;
-    }
-
-    if (gainNodeRef.current) {
-      gainNodeRef.current.disconnect();
-      gainNodeRef.current = null;
-    }
-
-    // Close audio context
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(console.error);
-      audioContextRef.current = null;
-    }
-
-    // Clean up audio element
-    if (audioElementRef.current) {
-      audioElementRef.current.pause();
-      audioElementRef.current.src = "";
-      audioElementRef.current = null;
-    }
-
-    // Clear audio chunks
-    audioChunksRef.current = [];
-  };
+    };
+  }, []);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -454,69 +85,107 @@ export default function DemoCall() {
   };
 
   const handleStartCall = async () => {
+    if (connectionStatus === 'connected') return;
+    
     try {
+      setConnectionStatus('connecting');
       setIsCallActive(true);
       setCallDuration(0);
-
-      // Initialize audio context and get microphone access
-      const audioInitialized = await initializeAudioContext();
-      if (!audioInitialized) {
+      
+      // Check if AG2 client is available
+      if (!window.ag2client) {
+        console.error("AG2 client library not loaded");
+        setConnectionStatus('error');
         setIsCallActive(false);
-        alert("Failed to access microphone. Please check permissions.");
+        alert("Voice chat library not loaded. Please refresh the page and try again.");
         return;
       }
 
-      // Initialize WebSocket connection
-      const wsInitialized = await initializeWebSocket();
-      if (!wsInitialized) {
-        setIsCallActive(false);
-        cleanup();
-        alert("Failed to connect to voice server. Please try again.");
-        return;
-      }
+      console.log('Initializing AG2 Client...');
+      console.log(`Connecting to ${WEBSOCKET_URL}...`);
+      
+      // Initialize AG2 WebSocket Audio Client with error handling
+      const client = new window.ag2client.WebsocketAudio(WEBSOCKET_URL);
+      audioClientRef.current = client;
+
+      // Add a timeout for connection
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Connection timeout - Server not responding')), 10000);
+      });
+
+      // Try to start the client with timeout
+      await Promise.race([
+        client.start(),
+        timeoutPromise
+      ]);
+      
+      // Only set connected if we actually connected
+      setConnectionStatus('connected');
+      console.log('✅ Connected & Live! Speak now.');
     } catch (error) {
       console.error("Error starting call:", error);
+      setConnectionStatus('error');
       setIsCallActive(false);
-      cleanup();
-      alert("Failed to start call. Please try again.");
+      
+      // Clean up the client reference
+      if (audioClientRef.current) {
+        try {
+          audioClientRef.current.stop();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        audioClientRef.current = null;
+      }
+      
+      const errorMessage = (error as Error).message || 'Unknown error';
+      
+      // Provide helpful error messages
+      if (errorMessage.includes('timeout') || errorMessage.includes('failed')) {
+        alert(`Failed to connect to voice server at ${WEBSOCKET_URL}.\n\nPlease ensure:\n1. The AG2 server is running\n2. The server address is correct\n3. Port 5050 is accessible`);
+      } else {
+        alert(`Failed to start call: ${errorMessage}`);
+      }
     }
   };
 
   const handleEndCall = () => {
-    setIsCallActive(false);
-    setCallDuration(0);
-    setConnectionStatus("disconnected");
-    cleanup();
+    if (connectionStatus === 'disconnected') return;
+    
+    try {
+      if (audioClientRef.current) {
+        console.log('Stopping AG2 Client...');
+        audioClientRef.current.stop();
+        audioClientRef.current = null;
+      }
+      
+      setIsCallActive(false);
+      setCallDuration(0);
+      setConnectionStatus('disconnected');
+      console.log('⛔ Call stopped.');
+    } catch (error) {
+      console.error("Error ending call:", error);
+      setConnectionStatus('disconnected');
+      setIsCallActive(false);
+      setCallDuration(0);
+    }
   };
 
   const toggleMute = () => {
+    // Note: AG2 client handles microphone internally
+    // This is a UI state toggle for future enhancement
     const newMutedState = !isMuted;
     setIsMuted(newMutedState);
-    isMutedRef.current = newMutedState;
-
-    // Update gain node to control microphone input
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = newMutedState ? 0 : 1;
-    }
-
-    // Stop sending data if muted
-    if (newMutedState && mediaRecorderRef.current) {
-      // MediaRecorder will continue recording but we won't send data
-      // The ondataavailable handler checks mute state via gain node
-    }
+    console.log(`Microphone ${newMutedState ? 'muted' : 'unmuted'}`);
+    // TODO: Implement mute functionality with AG2 client if supported
   };
 
   const toggleSpeaker = () => {
+    // Note: AG2 client handles audio playback internally
+    // This is a UI state toggle for future enhancement
     const newSpeakerState = !isSpeakerOn;
     setIsSpeakerOn(newSpeakerState);
-    isSpeakerOnRef.current = newSpeakerState;
-
-    // Update audio element volume
-    if (audioElementRef.current) {
-      audioElementRef.current.volume = newSpeakerState ? 1 : 0;
-      // Also update muted property for better browser compatibility
-      audioElementRef.current.muted = !newSpeakerState;
-    }
+    console.log(`Speaker ${newSpeakerState ? 'on' : 'off'}`);
+    // TODO: Implement speaker control with AG2 client if supported
   };
 
   if (!selectedRole) {

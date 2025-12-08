@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import useAppStore from "@/zustand";
+import { UserMenu } from "@/components/UserMenu";
+import { clearAuth } from "@/lib/auth";
 
 type Role = {
   id: number;
@@ -79,6 +81,12 @@ export default function RoleSelection() {
     }
   };
 
+  const handleLogout = () => {
+    clearAuth();
+    useAppStore.getState().setSelectedRole(null);
+    navigate("/");
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_rgba(10,10,10,0))]">
       {/* Ambient background */}
@@ -94,6 +102,11 @@ export default function RoleSelection() {
       </div>
 
       <div className="relative container mx-auto max-w-7xl px-6 py-16">
+        {/* Top Navigation */}
+        <div className="flex justify-end mb-6">
+          <UserMenu onLogout={handleLogout} />
+        </div>
+
         <div className="grid items-start gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
           <section className="space-y-10">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-2 text-primary shadow-[0_0_32px_rgba(14,165,233,0.15)]">

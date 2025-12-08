@@ -55,7 +55,7 @@ const FeatureHighlightCard = ({
 }: FeatureHighlight) => (
   <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 shadow-[0_20px_45px_-25px_rgba(15,23,42,0.6)] backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:bg-white/10">
     <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 text-white transition-colors duration-300 group-hover:bg-white/30">
+      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-white/15 text-white transition-colors duration-300 group-hover:bg-white/30">
         <Icon className="h-5 w-5" />
       </div>
       <div>
@@ -215,7 +215,7 @@ export default function Login() {
           <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
             Sign in to unlock role-based AI training
           </h1>
-          <p className="mx-auto max-w-xl text-base text-slate-300 sm:text-lg">
+          <p className="mx-auto max-w-xl text-base text-slate-300 sm:text-lg lg:mx-0">
             Develop next-level skills through guided chat simulations, cinematic
             micro-lessons, and measurable coaching loops built for logistics
             pros.
@@ -228,8 +228,8 @@ export default function Login() {
           </div>
 
           <div className="mx-auto flex max-w-md flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur lg:mx-0 lg:flex-row lg:items-center lg:gap-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white">
-              <ShieldCheck className="h-5 w-5" />
+            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-white/10 text-white">
+              <ShieldCheck className="h-6 w-6" />
             </div>
             <div className="space-y-1 text-left">
               <p className="text-sm font-semibold text-white/90">
@@ -256,7 +256,7 @@ export default function Login() {
                   to resume your training journey.
                 </CardDescription>
                 <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-500">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <ShieldCheck className="h-4 w-4" />
                   </span>
                   Enterprise-grade security with SOC 2 & GDPR compliance.

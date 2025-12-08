@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Phone, PlayCircle } from "lucide-react";
+import { MessageSquare, Phone, PlayCircle, ArrowLeft } from "lucide-react";
 import evansLogo from "@/assets/evans-logo.png";
 import useAppStore from "@/zustand";
 import masteryLogo from "@/assets/mastery-logo.png";
@@ -81,7 +81,16 @@ export default function HeroAITrainer() {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Top Navigation */}
-        <div className="flex justify-end mb-6">
+        <div className="flex justify-between items-center mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/role-selection")}
+            className="hover-lift"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Roles
+          </Button>
           <div className="flex items-center gap-3">
             <Button
               asChild

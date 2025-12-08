@@ -7,6 +7,7 @@ import {
   Search,
   Video as VideoIcon,
   Play,
+  X,
 } from "lucide-react";
 import useAppStore from "@/zustand";
 import { searchVideos, type VideoSearchResult } from "@/lib/api/endpoints/videos";
@@ -32,7 +33,9 @@ export default function VideoLessons() {
   const performSearch = async (nextQuery: string) => {
     const trimmed = nextQuery.trim();
     if (!trimmed) {
-      setError("Enter a topic to explore tailored training videos.");
+      setResults([]);
+      setHasSearched(false);
+      setError(null);
       return;
     }
 
@@ -88,12 +91,13 @@ export default function VideoLessons() {
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
           <span className="text-base font-medium text-foreground">Video Lessons Library</span>
           <Button
-            variant="secondary"
+            variant="ghost"
             size="sm"
-            className="rounded-full px-4 text-primary"
+            className="rounded-full px-3 hover:bg-destructive/10 hover:text-destructive"
             type="button"
+            onClick={() => navigate("/dashboard")}
           >
-            Video Lessons
+            <X className="h-5 w-5" />
           </Button>
         </div>
 
@@ -225,8 +229,8 @@ export default function VideoLessons() {
                           />
                           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
                           <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/90 text-white shadow-lg backdrop-blur-sm">
-                              <Play className="h-8 w-8 ml-1" fill="currentColor" />
+                            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full bg-primary/90 text-white shadow-lg backdrop-blur-sm">
+                              <Play className="h-7 w-7" fill="currentColor" />
                             </div>
                           </div>
                         </div>
@@ -235,7 +239,7 @@ export default function VideoLessons() {
                             <h3 className="text-lg font-semibold leading-tight text-foreground">
                               {video.title}
                             </h3>
-                            <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition group-hover:border-primary/50 group-hover:text-primary">
+                            <div className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition group-hover:border-primary/50 group-hover:text-primary">
                               <VideoIcon className="h-4 w-4" />
                             </div>
                           </div>

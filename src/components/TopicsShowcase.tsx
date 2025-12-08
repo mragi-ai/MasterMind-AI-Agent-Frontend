@@ -427,7 +427,14 @@ function VideoPopupWithSafeClose({
     }
   };
 
-  const goNext = () => goToStep(currentStepIndex + 1);
+  const goNext = () => {
+    if (currentStepIndex >= steps.length - 1) {
+      // On last step, "Done" button closes the modal
+      startClose();
+    } else {
+      goToStep(currentStepIndex + 1);
+    }
+  };
   const goPrev = () => goToStep(currentStepIndex - 1);
 
   const toggleFullscreen = async () => {
@@ -556,7 +563,6 @@ function VideoPopupWithSafeClose({
             <Button
               variant="default"
               onClick={goNext}
-              disabled={currentStepIndex >= steps.length - 1}
               className="ml-auto"
             >
               {currentStepIndex >= steps.length - 1 ? "Done" : "Next"}
