@@ -82,7 +82,7 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
   const handlePlayerReady = () => {
     setIsReady(true);
     setDuration(playerRef.current.getDuration());
-    
+
     // Set up interval to update current time
     const interval = setInterval(() => {
       if (playerRef.current && playerRef.current.getCurrentTime) {
@@ -108,7 +108,7 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
 
   const togglePlay = () => {
     if (!playerRef.current) return;
-    
+
     if (isPlaying) {
       playerRef.current.pauseVideo();
     } else {
@@ -118,7 +118,7 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
 
   const toggleMute = () => {
     if (!playerRef.current) return;
-    
+
     if (isMuted) {
       playerRef.current.unMute();
       setIsMuted(false);
@@ -187,10 +187,10 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
       <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black shadow-2xl">
         <div
           ref={containerRef}
-          className="absolute inset-0"
+          className="absolute inset-0 h-full w-full"
           id={`youtube-player-${videoId}`}
         />
-        
+
         {!isReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-muted/90">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />

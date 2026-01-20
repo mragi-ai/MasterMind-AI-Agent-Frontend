@@ -6,6 +6,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { User, Mail, LogOut, UserCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -17,10 +25,10 @@ interface UserMenuProps {
 
 export function UserMenu({ onLogout, userName = "User" }: UserMenuProps) {
   const navigate = useNavigate();
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
 
   const handleContactUs = () => {
-    // You can replace this with your contact page route
-    window.location.href = "mailto:support@mastermind.ai";
+    setIsContactModalOpen(true);
   };
 
   const handleViewProfile = () => {
@@ -64,6 +72,23 @@ export function UserMenu({ onLogout, userName = "User" }: UserMenuProps) {
           <span>Log out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
+      <Dialog open={isContactModalOpen} onOpenChange={setIsContactModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center">Contact Support</DialogTitle>
+            <DialogDescription className="pt-4 text-base leading-relaxed text-center">
+              You can reach our mentor desk directly at{" "}
+              <a href="tel:+14073070855" className="font-medium text-primary hover:underline">
+                +14073070855
+              </a>{" "}
+              or email us at{" "}
+              <a href="mailto:training-support@mastermind.ai" className="font-medium text-primary hover:underline">
+                training-support@mastermind.ai
+              </a>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
     </DropdownMenu>
   );
 }

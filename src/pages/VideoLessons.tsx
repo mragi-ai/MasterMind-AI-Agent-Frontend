@@ -93,7 +93,7 @@ export default function VideoLessons() {
           <Button
             variant="ghost"
             size="sm"
-            className="rounded-full px-3 hover:bg-destructive/10 hover:text-destructive"
+            className="rounded-full px-3 text-black hover:bg-transparent"
             type="button"
             onClick={() => navigate("/dashboard")}
           >

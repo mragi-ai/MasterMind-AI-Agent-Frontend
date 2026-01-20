@@ -17,29 +17,29 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    /* Evans Network - Primary Brand (Brighter) */
-    --primary: 166 86% 38%;
+    /* Evans Network - Primary Brand (Brighter and More Vibrant) */
+    --primary: 166 86% 42%;
     --primary-foreground: 0 0% 100%;
-    --primary-600: 166 86% 32%;
-    --primary-700: 166 86% 28%;
-    --primary-400: 166 86% 42%;
-    --primary-300: 166 86% 46%;
+    --primary-600: 166 86% 36%;
+    --primary-700: 166 86% 32%;
+    --primary-400: 166 86% 48%;
+    --primary-300: 166 86% 52%;
 
-    /* Mastery - Accent Brand (Brighter) */
-    --accent: 15 55% 58%;
+    /* Mastery - Accent Brand (Brighter and More Vibrant) */
+    --accent: 15 55% 62%;
     --accent-foreground: 0 0% 100%;
-    --accent-600: 15 55% 52%;
-    --accent-700: 15 55% 46%;
-    --accent-400: 15 55% 62%;
-    --accent-300: 15 55% 68%;
+    --accent-600: 15 55% 56%;
+    --accent-700: 15 55% 50%;
+    --accent-400: 15 55% 68%;
+    --accent-300: 15 55% 74%;
 
-    --secondary: 166 20% 96%;
+    --secondary: 166 25% 97%;
     --secondary-foreground: 166 86% 15%;
 
-    --muted: 210 40% 96.1%;
+    --muted: 210 30% 98%;
     --muted-foreground: 220 9% 46%;
 
-    --success: 166 86% 40%;
+    --success: 166 86% 44%;
     --success-foreground: 0 0% 100%;
 
     --destructive: 15 45% 49%;
@@ -51,8 +51,8 @@ All colors MUST be HSL.
 
     --radius: 0.75rem;
 
-    /* AI Trainer specific tokens */
-    --bg-soft: 0 0% 97%;
+    /* AI Trainer specific tokens - Brighter backgrounds */
+    --bg-soft: 0 0% 99%;
     --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
     --shadow: 0 8px 30px hsl(0 0% 0% / 0.08);
     --shadow-lg: 0 20px 40px hsl(0 0% 0% / 0.12);
@@ -140,6 +140,17 @@ All colors MUST be HSL.
   
   .shadow-custom-lg {
     box-shadow: var(--shadow-lg);
+  }
+
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
   }
 
   @keyframes slideUpFade {
@@ -254,10 +265,10 @@ All colors MUST be HSL.
   }
 
   .glass-effect {
-    background: hsl(var(--card) / 0.7);
+    background: hsl(var(--card) / 0.9);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid hsl(var(--border) / 0.5);
+    border: 1px solid hsl(var(--border) / 0.6);
   }
 
   .hover-lift {
@@ -283,23 +294,41 @@ All colors MUST be HSL.
     flex-wrap: wrap;
   }
 
+  .evans-logo-wrapper {
+    display: inline-block;
+  }
+
   .evans-logo {
     height: 120px;
     width: auto;
+    display: block;
+    /* Apply Evans green color glow */
+
   }
 
   .powered-by {
     display: flex;
     align-items: center;
     gap: 6px;
-    color: hsl(var(--muted-foreground));
+    color: #008066; /* Evans green */
     font-size: 14px;
     font-weight: 500;
+  }
+
+  .powered-by span {
+    color: #008066; /* Evans light green */
+  }
+
+  .mastery-logo-wrapper {
+    display: inline-block;
   }
 
   .mastery-logo {
     height: 420px;
     width: auto;
+    display: block;
+    /* Apply Mastery Orange color glow */
+
   }
 
   @media (max-width: 640px) {

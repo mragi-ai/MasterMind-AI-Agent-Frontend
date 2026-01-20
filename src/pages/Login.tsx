@@ -55,7 +55,7 @@ const FeatureHighlightCard = ({
 }: FeatureHighlight) => (
   <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 shadow-[0_20px_45px_-25px_rgba(15,23,42,0.6)] backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:bg-white/10">
     <div className="flex items-center gap-3">
-      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-white/15 text-white transition-colors duration-300 group-hover:bg-white/30">
+      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-white/15 text-white transition-colors duration-300 group-hover:bg-white/30">
         <Icon className="h-5 w-5" />
       </div>
       <div>
@@ -227,13 +227,13 @@ export default function Login() {
             ))}
           </div>
 
-          <div className="mx-auto flex max-w-md flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur lg:mx-0 lg:flex-row lg:items-center lg:gap-6">
-            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-white/10 text-white">
+          <div className="group relative mx-auto flex max-w-md flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-5 shadow-[0_20px_45px_-25px_rgba(15,23,42,0.6)] backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:bg-white/10 lg:mx-0 lg:flex-row lg:items-center lg:gap-6">
+            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors duration-300 group-hover:bg-white/30">
               <ShieldCheck className="h-6 w-6" />
             </div>
             <div className="space-y-1 text-left">
               <p className="text-sm font-semibold text-white/90">
-                4.9/5 learner satisfaction
+                4.9/5 Learner satisfaction
               </p>
               <p className="text-xs text-white/70">
                 Teams master live conversations and video-led drills in as

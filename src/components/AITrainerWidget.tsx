@@ -1,29 +1,45 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Mic, Phone, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { chatAsk, getAssessment } from "@/lib/api/endpoints/agent";
+import { chatAsk, demoAsk, getAssessment } from "@/lib/api/endpoints/agent";
 import useAppStore from "@/zustand";
 import { getUser } from "@/lib/auth";
 
 type Role = "user" | "assistant" | "system";
-type ContentKind = "text" | "video" | "options";
+type ContentKind = "text" | "video" | "options" | "rich";
+
+type MessagePart = {
+  kind: "text" | "video";
+  text?: string;
+  video?: {
+    src: string;
+    title: string;
+    description?: string;
+    poster?: string;
+    duration?: string;
+    youtube_url?: string;
+    isYoutube?: boolean;
+  };
+};
 
 type Message = {
   id: string;
   role: Role;
   kind: ContentKind;
   text?: string;
-  video?: { 
-    src: string; 
-    title: string; 
+  video?: {
+    src: string;
+    title: string;
     description?: string;
-    poster?: string; 
+    poster?: string;
     duration?: string;
     youtube_url?: string;
     isYoutube?: boolean;
   };
   options?: { label: string; value: string }[];
+  parts?: MessagePart[];
   source?: string;
   ts?: string;
 };
@@ -31,7 +47,7 @@ type Message = {
 // Generate robust unique IDs across environments (fallback if crypto.randomUUID is unavailable)
 const generateId = (): string =>
   typeof crypto !== "undefined" &&
-  typeof (crypto as any).randomUUID === "function"
+    typeof (crypto as any).randomUUID === "function"
     ? (crypto as any).randomUUID()
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -41,7 +57,7 @@ const getYouTubeEmbedUrl = (url: string): string | null => {
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
     /youtube\.com\/watch\?.*v=([^&\n?#]+)/,
   ];
-  
+
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match && match[1]) {
@@ -56,25 +72,30 @@ const isYouTubeUrl = (url: string): boolean => {
   return /youtube\.com|youtu\.be/.test(url);
 };
 
+// Helper function to check if URL is a direct video link
+const isPlayableVideoUrl = (url: string): boolean => {
+  return /\.(mp4|webm|ogg|mov)$/i.test(url);
+};
+
 // Helper function to map role to API format
 const mapRoleToApiFormat = (role: string | undefined, title: string | undefined): string => {
   if (!role && !title) return "customer record";
-  
+
   // Map role values to API format if needed
   const roleMap: Record<string, string> = {
     "customer_representative": "customer record",
     "carrier_representative": "carrier record",
     "agent_manager": "agent manager",
   };
-  
+
   if (role && roleMap[role]) {
     return roleMap[role];
   }
-  
+
   // If no mapping found, use the role as-is or convert title
   if (role) return role;
   if (title) return title.toLowerCase().replace(/\s+/g, " ");
-  
+
   return "customer record";
 };
 
@@ -96,7 +117,10 @@ export default function AITrainerWidget({
   onEscalate,
   startOpen = false,
   supportEmail = "training-support@mastermind.ai",
-}: Props) {
+  placeholder,
+}: Props & { placeholder?: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(startOpen);
   const [hideLauncher, setHideLauncher] = useState(false);
   const [permission, setPermission] = useState("prompt");
@@ -140,6 +164,212 @@ export default function AITrainerWidget({
 
   const [ariaLive, setAriaLive] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
+
+  const formatMsgText = (text: string | undefined, startCounter: number = 0) => {
+    if (!text) return { html: "", counter: startCounter };
+
+    let counter = startCounter;
+    let html = text;
+
+    // Detect if content is predominantly HTML
+    const isHtml = /<[a-z][\s\S]*>/i.test(text);
+
+    if (isHtml) {
+      // It's HTML. Match <li><strong>, <p><strong>, or <strong> at start of block
+      html = html.replace(/(<li>|<p>|<td>|^)\s*<strong>/g, (match, p1) => {
+        counter++;
+        return `${p1}${counter}. <strong>`;
+      });
+    } else {
+      // It's Markdown. Process lines for numbering and then convert MD to HTML
+      let lines = text.split("\n");
+      lines = lines.map((line) => {
+        const trimmed = line.trim();
+        if ((trimmed.startsWith("**") || trimmed.startsWith("__")) && !/^\d+\./.test(trimmed)) {
+          counter++;
+          return `${counter}. ${line}`;
+        }
+        return line;
+      });
+      html = lines.join("\n");
+
+      // Replace Markdown bold/italic with HTML tags
+      html = html
+        .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
+        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+        .replace(/__(.*?)__/g, "<strong>$1</strong>")
+        .replace(/\*(.*?)\*/g, "<em>$1</em>")
+        .replace(/_(.*?)_/g, "<em>$1</em>");
+
+      // Handle bullet points
+      html = html.replace(/^\s*[-*+]\s+(.*)$/gm, "• $1");
+
+      // Convert newlines to <br /> if no block tags are present
+      if (!html.includes("<p>") && !html.includes("<br")) {
+        html = html.replace(/\n/g, "<br />");
+      }
+    }
+
+    return { html, counter };
+  };
+
+  const renderVideo = (video: any) => {
+    return (
+      <div className="mt-2 space-y-2">
+        {video.isYoutube && video.youtube_url ? (
+          // YouTube video - show embed or clickable card
+          <div className="rounded-lg overflow-hidden border border-border bg-card">
+            {video.src ? (
+              // Embedded YouTube video
+              <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+                <iframe
+                  src={`${video.src}?rel=0&modestbranding=1`}
+                  className="absolute top-0 left-0 w-full h-full"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  title={video.title}
+                />
+              </div>
+            ) : (
+              // Clickable YouTube card
+              <a
+                href={video.youtube_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block group"
+              >
+                <div className="relative aspect-video bg-black overflow-hidden">
+                  {video.poster ? (
+                    <img
+                      src={video.poster}
+                      alt={video.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-red-600 to-red-800">
+                      <svg
+                        className="w-16 h-16 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M10 16.5l6-4.5-6-4.5v9zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/20 transition-colors">
+                    <div className="w-16 h-16 rounded-full bg-red-600/90 group-hover:bg-red-600 flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+                      <svg
+                        className="w-8 h-8 text-white ml-1"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            )}
+            <div className="p-3 bg-card">
+              <h4 className="font-semibold text-sm mb-1">{video.title}</h4>
+              {video.description && (
+                <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                  {video.description}
+                </p>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                asChild
+                className="w-full"
+              >
+                <a
+                  href={video.youtube_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Watch on YouTube
+                </a>
+              </Button>
+            </div>
+          </div>
+        ) : isPlayableVideoUrl(video.src || "") ? (
+          // Playable direct video link
+          <div className="rounded-lg overflow-hidden border border-border bg-black">
+            <video
+              controls
+              playsInline
+              preload="metadata"
+              poster={video.poster}
+              className="w-full"
+            >
+              <source src={video.src} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+            {video.title && (
+              <div className="p-3 bg-card border-t border-border">
+                <h4 className="font-semibold text-sm mb-1">{video.title}</h4>
+                {video.description && (
+                  <p className="text-xs text-muted-foreground line-clamp-2">
+                    {video.description}
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="flex gap-2 p-2 bg-card border-t border-border">
+              <Button
+                size="sm"
+                variant="outline"
+                asChild
+                className="flex-1"
+              >
+                <a
+                  href={video.src}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open in new tab
+                </a>
+              </Button>
+            </div>
+          </div>
+        ) : (
+          // Fallback for non-playable, non-youtube links (e.g. example.com links)
+          <div className="rounded-lg overflow-hidden border border-border bg-card p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Phone className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-sm">{video.title}</h4>
+                <p className="text-xs text-muted-foreground line-clamp-1">External Resource</p>
+              </div>
+            </div>
+            {video.description && (
+              <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
+                {video.description}
+              </p>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              asChild
+              className="w-full"
+            >
+              <a
+                href={video.youtube_url || video.src}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                View Resource
+              </a>
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Listen for open-ai-trainer event
   useEffect(() => {
@@ -266,7 +496,7 @@ export default function AITrainerWidget({
     const messageText = text || input.trim();
     if (!messageText || sending) return;
 
-    const currentUser = getUser();
+    const currentUser = getUser<{ user_id: string }>();
     console.log("Current user in sendText:", currentUser?.user_id);
     setSending(true);
     setInput("");
@@ -282,12 +512,16 @@ export default function AITrainerWidget({
     setTyping(true);
 
     try {
-      const res = await chatAsk({
+      const payload = {
         user_id: currentUser?.user_id || "",
-        session_id: sessionId || "",
-        role: "dispatcher",
+        agent_id: selectedRole?.id || "",
         question: messageText,
-      });
+      };
+
+      const res =
+        location.pathname === "/demo-chat"
+          ? await demoAsk(payload)
+          : await chatAsk({ ...payload, session_id: sessionId || "" });
 
       // Extract session_id from response if present
       if (res.session_id) {
@@ -298,19 +532,59 @@ export default function AITrainerWidget({
       }
 
       const mapped: Message[] = [];
+      let finalAnswer = res.answer || "";
+      const richParts: MessagePart[] = [];
 
-      // First, add text answer if present
-      if (res.answer) {
+      // Process answer into rich parts (text and video)
+      if (finalAnswer) {
+        // Split by <video> tags
+        const parts = finalAnswer.split(/(<video\s+[^>]*>.*?<\/video>)/gi);
+
+        parts.forEach(part => {
+          if (part.toLowerCase().startsWith("<video")) {
+            // Extract video info
+            const srcMatch = part.match(/src=['"]([^'"]+)['"]/i);
+            const titleMatch = part.match(/title=['"]([^'"]+)['"]/i);
+            const src = srcMatch ? srcMatch[1] : "";
+            const title = titleMatch ? titleMatch[1] : "Video Tutorial";
+
+            const youtubeUrl = src;
+            const isYoutube = isYouTubeUrl(youtubeUrl);
+            const embedUrl = isYoutube ? getYouTubeEmbedUrl(youtubeUrl) : null;
+
+            richParts.push({
+              kind: "video",
+              video: {
+                src: embedUrl || (isYoutube ? "" : src),
+                title: title,
+                youtube_url: youtubeUrl,
+                isYoutube: isYoutube,
+              },
+            });
+          } else {
+            const trimmed = part.trim();
+            if (trimmed) {
+              richParts.push({
+                kind: "text",
+                text: part,
+              });
+            }
+          }
+        });
+      }
+
+      // Add the rich message if parts exist
+      if (richParts.length > 0) {
         mapped.push({
           id: generateId(),
           role: "assistant",
-          kind: "text",
-          text: res.answer,
+          kind: "rich",
+          parts: richParts,
           ts: new Date().toLocaleTimeString(),
         });
       }
 
-      // Process messages if present
+      // Process other messages if present
       if (res.messages && Array.isArray(res.messages)) {
         res.messages.forEach((rm: any) => {
           mapped.push({
@@ -323,8 +597,8 @@ export default function AITrainerWidget({
         });
       }
 
-      // Process videos if present
-      if (res.videos && Array.isArray(res.videos) && res.videos.length > 0) {
+      // Process explicit videos if present (not embedded in answer)
+      if (res.videos && Array.isArray(res.videos) && res.videos.length > 0 && richParts.length === 0) {
         res.videos.forEach((video: any) => {
           const youtubeUrl = video.youtube_url || video.url || "";
           const isYoutube = isYouTubeUrl(youtubeUrl);
@@ -335,7 +609,6 @@ export default function AITrainerWidget({
             role: "assistant",
             kind: "video",
             video: {
-              // Only set src to embed URL if we successfully generated one, otherwise leave empty for clickable card
               src: embedUrl || (isYoutube ? "" : (youtubeUrl || video.src || "")),
               title: video.title || "Video",
               description: video.description,
@@ -389,7 +662,7 @@ export default function AITrainerWidget({
       pushContactDetails();
     } else if (value === "question") {
       // Call assessment API when "Ask a question" is clicked
-      const currentUser = getUser();
+      const currentUser = getUser<{ user_id: string }>();
       if (!currentUser?.user_id) {
         pushMessage({
           id: generateId(),
@@ -412,15 +685,14 @@ export default function AITrainerWidget({
         return;
       }
 
-      // Get role from selectedRole, mapped to API format
-      const roleValue = mapRoleToApiFormat(selectedRole?.role, selectedRole?.title);
-      
+
+
       setTyping(true);
       try {
         const res = await getAssessment({
           user_id: currentUser.user_id,
           session_id: sessionId,
-          role: roleValue,
+          agent_id: selectedRole?.id || "",
         });
 
         // Display the assessment/question response
@@ -591,8 +863,7 @@ export default function AITrainerWidget({
   };
 
   const callNow = () => {
-    if (!phoneNumber) return;
-    window.location.href = `tel:${phoneNumber.replace(/^tel:/, "")}`;
+    navigate("/demo-call");
   };
 
   const closeWidget = () => setOpen(false);
@@ -701,7 +972,7 @@ export default function AITrainerWidget({
                   <Phone className="h-4 w-4" />
                 </Button>
               )}
-              <Button
+              {/* <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => {
@@ -713,7 +984,7 @@ export default function AITrainerWidget({
                 className="h-8 px-3 text-xs"
               >
                 Escalate
-              </Button>
+              </Button> */}
               <Button
                 size="sm"
                 variant="ghost"
@@ -760,140 +1031,62 @@ export default function AITrainerWidget({
                         : "bg-card/95 border border-border hover:border-border/80"
                     )}
                   >
-                    {m.kind === "text" && (
+                    {/* {m.kind === "text" && (
                       <div className="text-base leading-relaxed">{m.text}</div>
+                    )} */}
+                    {m.kind === "text" && (
+                      <div
+                        className="text-base leading-relaxed prose prose-sm max-w-none dark:prose-invert"
+                        dangerouslySetInnerHTML={{
+                          __html: formatMsgText(m.text).html
+                        }}
+                      />
+                    )}
+
+                    {m.kind === "rich" && m.parts && (
+                      <div className="space-y-4">
+                        {(() => {
+                          let currentCounter = 0;
+                          return m.parts.map((part, idx) => {
+                            if (part.kind === "text") {
+                              const { html, counter } = formatMsgText(part.text, currentCounter);
+                              currentCounter = counter;
+                              return (
+                                <div
+                                  key={idx}
+                                  className="text-base leading-relaxed prose prose-sm max-w-none dark:prose-invert"
+                                  dangerouslySetInnerHTML={{ __html: html }}
+                                />
+                              );
+                            }
+                            if (part.kind === "video" && part.video) {
+                              return (
+                                <div key={idx} className="mt-2">
+                                  {renderVideo(part.video)}
+                                </div>
+                              );
+                            }
+                            return null;
+                          });
+                        })()}
+                      </div>
                     )}
 
                     {m.kind === "video" && m.video && (
-                      <div className="mt-2 space-y-2">
-                        {m.video.isYoutube && m.video.youtube_url ? (
-                          // YouTube video - show embed or clickable card
-                          <div className="rounded-lg overflow-hidden border border-border bg-card">
-                            {m.video.src ? (
-                              // Embedded YouTube video
-                              <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-                                <iframe
-                                  src={`${m.video.src}?rel=0&modestbranding=1`}
-                                  className="absolute top-0 left-0 w-full h-full"
-                                  frameBorder="0"
-                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                  allowFullScreen
-                                  title={m.video.title}
-                                />
-                              </div>
-                            ) : (
-                              // Clickable YouTube card
-                              <a
-                                href={m.video.youtube_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block group"
-                              >
-                                <div className="relative aspect-video bg-black overflow-hidden">
-                                  {m.video.poster ? (
-                                    <img
-                                      src={m.video.poster}
-                                      alt={m.video.title}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-red-600 to-red-800">
-                                      <svg
-                                        className="w-16 h-16 text-white"
-                                        fill="currentColor"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path d="M10 16.5l6-4.5-6-4.5v9zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
-                                      </svg>
-                                    </div>
-                                  )}
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/20 transition-colors">
-                                    <div className="w-16 h-16 rounded-full bg-red-600/90 group-hover:bg-red-600 flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
-                                      <svg
-                                        className="w-8 h-8 text-white ml-1"
-                                        fill="currentColor"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path d="M8 5v14l11-7z" />
-                                      </svg>
-                                    </div>
-                                  </div>
-                                </div>
-                              </a>
-                            )}
-                            <div className="p-3 bg-card">
-                              <h4 className="font-semibold text-sm mb-1">{m.video.title}</h4>
-                              {m.video.description && (
-                                <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                                  {m.video.description}
-                                </p>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                asChild
-                                className="w-full"
-                              >
-                                <a
-                                  href={m.video.youtube_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  Watch on YouTube
-                                </a>
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          // Regular video
-                          <div className="rounded-lg overflow-hidden border border-border bg-black">
-                            <video
-                              controls
-                              playsInline
-                              preload="metadata"
-                              poster={m.video.poster}
-                              className="w-full"
-                            >
-                              <source src={m.video.src} type="video/mp4" />
-                              Your browser does not support the video tag.
-                            </video>
-                            {m.video.title && (
-                              <div className="p-3 bg-card border-t border-border">
-                                <h4 className="font-semibold text-sm mb-1">{m.video.title}</h4>
-                                {m.video.description && (
-                                  <p className="text-xs text-muted-foreground line-clamp-2">
-                                    {m.video.description}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                            <div className="flex gap-2 p-2 bg-card border-t border-border">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                asChild
-                                className="flex-1"
-                              >
-                                <a
-                                  href={m.video.src}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  Open in new tab
-                                </a>
-                              </Button>
-                            </div>
-                          </div>
-                        )}
+                      <div className="mt-2">
+                        {renderVideo(m.video)}
                       </div>
                     )}
 
                     {m.kind === "options" && m.options && (
                       <>
                         {m.text && (
-                          <div className="text-base leading-relaxed mb-2">
-                            {m.text}
-                          </div>
+                          <div
+                            className="text-base leading-relaxed prose prose-sm max-w-none dark:prose-invert mb-2"
+                            dangerouslySetInnerHTML={{
+                              __html: formatMsgText(m.text).html
+                            }}
+                          />
                         )}
                         <div
                           className="flex flex-wrap gap-2 mt-2"
@@ -957,7 +1150,7 @@ export default function AITrainerWidget({
                 "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
                 "border-2 border-transparent",
                 recording &&
-                  "ring-2 ring-destructive border-destructive/50 bg-destructive/10"
+                "ring-2 ring-destructive border-destructive/50 bg-destructive/10"
               )}
               onMouseDown={startRecording}
               onMouseUp={stopRecording}
@@ -972,8 +1165,8 @@ export default function AITrainerWidget({
                 recording
                   ? "Recording—release to send"
                   : micPermission === "denied"
-                  ? "Microphone blocked—click to retry permission"
-                  : "Hold to talk"
+                    ? "Microphone blocked—click to retry permission"
+                    : "Hold to talk"
               }
             >
               {recording ? (
@@ -999,7 +1192,9 @@ export default function AITrainerWidget({
                   "group-hover:border-primary/20 focus:border-primary/20"
                 )}
                 rows={1}
-                placeholder="Type your message..."
+                // placeholder="Type your message..."
+                placeholder={placeholder || "Type your message..."}
+
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value);
@@ -1038,32 +1233,32 @@ export default function AITrainerWidget({
             micPermission === "prompt" ||
             micPermission === "unsupported" ||
             !isSecure) && (
-            <div className="w-full border-t border-yellow-200 bg-yellow-50 px-6 py-3 text-xs text-yellow-700">
-              {!isSecure && (
-                <>
-                  Microphone requires a secure context. Run on HTTPS or
-                  localhost.
-                </>
-              )}
-              {isSecure && micPermission === "unsupported" && (
-                <>Microphone API not supported by this browser.</>
-              )}
-              {isSecure && micPermission === "denied" && (
-                <>
-                  Microphone is blocked in your browser. Click Enable Microphone
-                  and allow access in the prompt.
-                </>
-              )}
-              {isSecure && micPermission === "prompt" && (
-                <>To use voice, click Enable Microphone and grant permission.</>
-              )}
-              <div className="mt-2">
-                <Button size="sm" onClick={ensureMicPermission} className="h-7">
-                  Enable Microphone
-                </Button>
+              <div className="w-full border-t border-yellow-200 bg-yellow-50 px-6 py-3 text-xs text-yellow-700">
+                {!isSecure && (
+                  <>
+                    Microphone requires a secure context. Run on HTTPS or
+                    localhost.
+                  </>
+                )}
+                {isSecure && micPermission === "unsupported" && (
+                  <>Microphone API not supported by this browser.</>
+                )}
+                {isSecure && micPermission === "denied" && (
+                  <>
+                    Microphone is blocked in your browser. Click Enable Microphone
+                    and allow access in the prompt.
+                  </>
+                )}
+                {isSecure && micPermission === "prompt" && (
+                  <>To use voice, click Enable Microphone and grant permission.</>
+                )}
+                <div className="mt-2">
+                  <Button size="sm" onClick={ensureMicPermission} className="h-7">
+                    Enable Microphone
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </section>
       )}
     </>

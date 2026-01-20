@@ -102,17 +102,21 @@ const commandItems = [
 
 const Index = () => {
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Subtle background gradient */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-30">
-        <div className="absolute -top-1/2 -left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-float" />
+    <div className="min-h-screen bg-gradient-to-br from-background via-primary/2 to-accent/2 relative overflow-hidden">
+      {/* Enhanced background gradient - Brighter and more vibrant */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-50">
+        <div className="absolute -top-1/2 -left-1/4 w-96 h-96 bg-primary/15 rounded-full blur-3xl animate-float" />
         <div
-          className="absolute top-1/4 right-1/4 w-64 h-64 bg-accent/8 rounded-full blur-3xl animate-float"
+          className="absolute top-1/4 right-1/4 w-64 h-64 bg-accent/12 rounded-full blur-3xl animate-float"
           style={{ animationDelay: "-2s" }}
         />
         <div
-          className="absolute -bottom-1/2 -right-1/4 w-96 h-96 bg-primary/8 rounded-full blur-3xl animate-float"
+          className="absolute -bottom-1/2 -right-1/4 w-96 h-96 bg-primary/12 rounded-full blur-3xl animate-float"
           style={{ animationDelay: "-3s" }}
+        />
+        <div
+          className="absolute top-1/2 left-1/2 w-80 h-80 bg-accent/10 rounded-full blur-3xl animate-float"
+          style={{ animationDelay: "-4s" }}
         />
       </div>
 
@@ -128,7 +132,7 @@ const Index = () => {
       <TopicsShowcase />
 
       {/* Footer */}
-      <footer className="border-t border-border/50 mt-20 glass-effect">
+      <footer className="border-t border-border/50 mt-20 glass-effect bg-white/90">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground font-medium">

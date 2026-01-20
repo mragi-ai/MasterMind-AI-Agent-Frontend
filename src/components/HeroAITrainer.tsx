@@ -7,11 +7,20 @@ import masteryLogo from "@/assets/mastery-logo.png";
 import { useNavigate } from "react-router-dom";
 import { UserMenu } from "./UserMenu";
 import { clearAuth } from "@/lib/auth";
+import { logout } from "@/lib/api/endpoints/auth";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function HeroAITrainer() {
   const navigate = useNavigate();
   const selectedRole = useAppStore((state) => state.selectedRole);
   const [typedText, setTypedText] = useState("");
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Prompt examples for each role
@@ -21,7 +30,12 @@ export default function HeroAITrainer() {
     "Agent Manager": "Walk me through a five-minute coaching huddle agenda.",
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
     clearAuth();
     useAppStore.getState().setSelectedRole(null);
     navigate("/");
@@ -65,17 +79,21 @@ export default function HeroAITrainer() {
 
   return (
     <section
-      className={`relative py-16 overflow-hidden transition-all duration-700 bg-gradient-to-br ${getGradientClass()}`}
+      className={`relative py-16 overflow-hidden transition-all duration-700 bg-gradient-to-br from-white via-primary/5 to-accent/5 ${getGradientClass()}`}
     >
-      {/* Aurora background */}
-      <div className="absolute inset-0 pointer-events-none opacity-40">
+      {/* Aurora background - Brighter and more vibrant */}
+      <div className="absolute inset-0 pointer-events-none opacity-60">
         <div
-          className="absolute top-0 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-float"
+          className="absolute top-0 left-1/4 w-96 h-96 bg-primary/25 rounded-full blur-3xl animate-float"
           style={{ animationDuration: "8s" }}
         />
         <div
-          className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/15 rounded-full blur-3xl animate-float"
+          className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/20 rounded-full blur-3xl animate-float"
           style={{ animationDuration: "10s", animationDelay: "-3s" }}
+        />
+        <div
+          className="absolute top-1/2 left-1/2 w-80 h-80 bg-primary/15 rounded-full blur-3xl animate-float"
+          style={{ animationDuration: "12s", animationDelay: "-5s" }}
         />
       </div>
 
@@ -93,15 +111,13 @@ export default function HeroAITrainer() {
           </Button>
           <div className="flex items-center gap-3">
             <Button
-              asChild
               variant="outline"
               className="hover-lift shadow-sm"
               size="sm"
+              onClick={() => setIsSupportModalOpen(true)}
             >
-              <a href="tel:+14073070855">
-                <Phone className="h-4 w-4 mr-2" />
-                Call Support
-              </a>
+              <Phone className="h-4 w-4 mr-2" />
+              Call Support
             </Button>
             <UserMenu onLogout={handleLogout} userName={selectedRole?.title} />
           </div>
@@ -109,14 +125,18 @@ export default function HeroAITrainer() {
 
         {/* Co-brand logos */}
         <div className="co-brand-bar justify-center mb-10">
-          <img src={masteryLogo} alt="Mastery" className="mastery-logo" />
+          <div className="mastery-logo-wrapper">
+            <img src={masteryLogo} alt="Mastery" className="mastery-logo" />
+          </div>
           <div className="powered-by">
             <span>Powered by</span>
-            <img
-              src={evansLogo}
-              alt="Evans Network of Companies"
-              className="evans-logo"
-            />
+            <div className="evans-logo-wrapper">
+              <img
+                src={evansLogo}
+                alt="Evans Network of Companies"
+                className="evans-logo"
+              />
+            </div>
           </div>
         </div>
 
@@ -126,19 +146,18 @@ export default function HeroAITrainer() {
             {/* Selected role badge */}
             <div className="inline-flex items-center gap-3 px-5 py-3 rounded-full glass-effect border border-primary/20 mb-6">
               <div
-                className={`w-10 h-10 flex items-center justify-center rounded-full text-lg ${
-                  selectedRole?.color === "primary"
-                    ? "bg-primary/10 text-primary"
-                    : "bg-accent/10 text-accent"
-                }`}
+                className={`w-10 h-10 flex items-center justify-center rounded-full text-lg ${selectedRole?.color === "primary"
+                  ? "bg-primary/10 text-primary"
+                  : "bg-accent/10 text-accent"
+                  }`}
               >
                 {selectedRole?.title.includes("Dispatch")
                   ? "🚛"
                   : selectedRole?.title.includes("Billing")
-                  ? "💰"
-                  : selectedRole?.title.includes("Customer")
-                  ? "📞"
-                  : "✨"}
+                    ? "💰"
+                    : selectedRole?.title.includes("Customer")
+                      ? "📞"
+                      : "✨"}
               </div>
               <div className="flex flex-col text-left">
                 <span className="text-base font-semibold text-foreground">
@@ -179,7 +198,7 @@ export default function HeroAITrainer() {
 
           {/* Right: Chat simulation */}
           <div className="relative">
-            <div className="glass-effect rounded-2xl border-2 border-primary/20 p-6 shadow-custom-lg backdrop-blur-md">
+            <div className="glass-effect rounded-2xl border-2 border-primary/30 p-6 shadow-custom-lg backdrop-blur-md bg-white/95">
               <div className="flex items-center gap-3 mb-4 pb-4 border-b border-border">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
                   <MessageSquare className="h-5 w-5 text-white" />
@@ -224,6 +243,23 @@ export default function HeroAITrainer() {
           </div>
         </div>
       </div>
+      <Dialog open={isSupportModalOpen} onOpenChange={setIsSupportModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center">Contact Support</DialogTitle>
+            <DialogDescription className="pt-4  text-base leading-relaxed text-center">
+              You can reach our mentor desk directly at{" "}
+              <a href="tel:+14073070855" className="font-medium text-primary hover:underline">
+                +14073070855
+              </a>{" "}
+              or email us at{" "}
+              <a href="mailto:training-support@mastermind.ai" className="font-medium text-primary hover:underline">
+                training-support@mastermind.ai
+              </a>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

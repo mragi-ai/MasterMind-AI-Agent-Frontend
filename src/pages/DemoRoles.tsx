@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Card,
@@ -19,12 +19,15 @@ import {
   Briefcase,
   MessageSquare,
   Phone,
+  Bot,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import useAppStore from "@/zustand";
+import { listAgents, type Agent } from "@/lib/api/endpoints/agent";
 
 type Role = {
-  id: number;
+  id: string;
   title: string;
   description: string;
   icon: React.ElementType;
@@ -32,73 +35,124 @@ type Role = {
   role?: string;
 };
 
-// Predefined demo roles
-const demoRoles: Role[] = [
-  {
-    id: 1,
-    title: "Carrier Representative",
-    description:
-      "Coordinate with carriers, oversee loads, and keep freight moving on schedule.",
-    icon: Truck,
-    color: "primary",
-    role: "carrier_representative",
-  },
-  {
-    id: 2,
-    title: "Customer Representative",
-    description:
-      "Support shippers and receivers, deliver proactive updates, and resolve issues fast.",
-    icon: Headset,
-    color: "accent",
-    role: "customer_representative",
-  },
-  {
-    id: 3,
-    title: "Agent Manager",
-    description:
-      "Orchestrate agent performance, monitor KPIs, and deliver operational insights.",
-    icon: ShieldCheck,
-    color: "accent",
-    role: "agent_manager",
-  },
-  {
-    id: 4,
-    title: "Dispatcher",
-    description:
-      "Manage daily operations, coordinate shipments, and ensure timely deliveries.",
-    icon: Briefcase,
-    color: "primary",
-    role: "dispatcher",
-  },
-  {
-    id: 5,
-    title: "Customer Service Agent",
-    description:
-      "Handle customer inquiries, provide support, and maintain customer satisfaction.",
-    icon: MessageSquare,
-    color: "accent",
-    role: "customer_service_agent",
-  },
-  {
-    id: 6,
-    title: "Operations Coordinator",
-    description:
-      "Streamline logistics operations, optimize routes, and manage resources efficiently.",
-    icon: User,
-    color: "primary",
-    role: "operations_coordinator",
-  },
-];
+// Map agent_id to icons
+const getIconForAgent = (agentId?: string): React.ElementType => {
+  // Safely handle missing or non‑string values
+  const key = typeof agentId === "string" ? agentId.toLowerCase() : "";
+  const iconMap: Record<string, React.ElementType> = {
+    manager: Briefcase,
+    qa: ShieldCheck,
+    research: User,
+    trainer: Headset,
+    rag: Bot,
+    coding: MessageSquare,
+  };
+  return iconMap[key] || Bot;
+};
+
+
+const MAX_LENGTH = 120;
+
+const isLongText = (text: string) => text.length > MAX_LENGTH;
+
+// Convert Agent to Role format
+const agentToRole = (agent: Agent, index: number): Role => {
+  return {
+    id: agent._id || agent.id,
+    title: agent.name,
+    description: agent.instruction,
+    icon: getIconForAgent(agent.agent_id),
+    color: index % 2 === 0 ? "primary" : "accent",
+    role: agent.agent_id,
+  };
+};
 
 export default function DemoRoles() {
   const navigate = useNavigate();
   const isMobile = useMediaQuery("(max-width: 768px)");
-  const [selectedRole, setSelectedRole] = useState<number | null>(null);
+  const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  // New state to hold the raw API response for debugging
 
-  const handleRoleSelect = (roleId: number) => {
+  const [expandedRoles, setExpandedRoles] = useState<Record<string, boolean>>({});
+
+  const handleRoleSelect = (roleId: string) => {
     setSelectedRole(roleId);
   };
 
+  const toggleReadMore = (id: string) => {
+    setExpandedRoles((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  // Fetch agents from API
+  useEffect(() => {
+    const fetchAgents = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        console.log("🚀 Fetching agents in DemoRoles...");
+        const response = await listAgents();
+        console.log("📦 Full API Response:", response);
+
+        // Check if response is HTML (ngrok warning page)
+        if (typeof response === 'string' || (response as any)?.status !== "success") {
+          // Check if it's an HTML response
+          const responseStr = JSON.stringify(response);
+          if (responseStr.includes('<!DOCTYPE html>') || responseStr.includes('ngrok')) {
+            console.error("❌ Received ngrok warning page instead of JSON");
+            setError("Ngrok warning page detected. Please visit the API URL in your browser first to bypass the warning, then refresh this page.");
+            return;
+          }
+        }
+
+        if (response.status === "success" && response.data && Array.isArray(response.data)) {
+          console.log("✅ Agents fetched successfully!");
+          console.log("📊 Total Agents:", response.data.length);
+          console.log("🤖 Agents List:", response.data);
+
+          // Log each agent individually
+          response.data.forEach((agent: Agent, index: number) => {
+            console.log(`\n🤖 Agent ${index + 1}:`, agent);
+          });
+
+          // Convert agents to roles
+          const convertedRoles = response.data.map((agent, index) =>
+            agentToRole(agent, index)
+          );
+          setRoles(convertedRoles);
+          // Save raw response for debugging UI
+
+        } else {
+          console.warn("⚠️ Unexpected response structure:", response);
+          setError("Unexpected response structure from API. Please check the API endpoint.");
+        }
+      } catch (error: any) {
+        console.error("❌ Failed to fetch agents:", error);
+
+        // Check if error response is HTML
+        if (error?.response?.data && typeof error.response.data === 'string' && error.response.data.includes('<!DOCTYPE html>')) {
+          console.error("❌ Received HTML response (likely ngrok warning page)");
+          setError("Ngrok warning page detected. The API endpoint may require browser verification. Please check the API URL.");
+        } else {
+          console.error("Error details:", {
+            message: error?.message,
+            response: error?.response?.data,
+            stack: error?.stack,
+          });
+          setError(error?.message || "Failed to load agents. Please try again.");
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void fetchAgents();
+  }, []);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_rgba(10,10,10,0))]">
@@ -157,87 +211,140 @@ export default function DemoRoles() {
                 </h2>
               </div>
               <div className="rounded-full border border-border/80 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                {demoRoles.length} Roles
+                {roles.length} Roles
               </div>
             </header>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              {demoRoles.map((role) => {
-                const isSelected = selectedRole === role.id;
-                const Icon = role.icon;
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center gap-4 py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Loading agents...</p>
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed border-border/70 bg-muted/20 p-12 text-center text-muted-foreground">
+                <Bot className="h-12 w-12 text-primary/70" />
+                <div>
+                  <p className="text-lg font-medium text-foreground">Failed to load agents</p>
+                  <p className="text-sm">{error}</p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setError(null);
+                    window.location.reload();
+                  }}
+                >
+                  Try Again
+                </Button>
+              </div>
+            ) : roles.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed border-border/70 bg-muted/20 p-12 text-center text-muted-foreground">
+                <Bot className="h-12 w-12 text-primary/70" />
+                <div>
+                  <p className="text-lg font-medium text-foreground">No agents found</p>
+                  <p className="text-sm">
+                    There are no agents available at the moment. Please check back later.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {roles.map((role) => {
+                  const isSelected = selectedRole === role.id;
+                  const Icon = role.icon;
 
-                return (
-                  <Card
-                    key={role.id}
-                    onClick={() => handleRoleSelect(role.id)}
-                    className={cn(
-                      "group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/80 transition duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_20px_45px_rgba(14,165,233,0.15)]",
-                      isSelected &&
+                  return (
+                    <Card
+                      key={role.id}
+                      onClick={() => handleRoleSelect(role.id)}
+                      className={cn(
+                        "group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/80 transition duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_20px_45px_rgba(14,165,233,0.15)]",
+                        isSelected &&
                         "border-primary/60 shadow-[0_24px_60px_rgba(14,165,233,0.28)] ring-1 ring-primary/40"
-                    )}
-                  >
-                    <div className="absolute inset-x-8 top-0 h-1 rounded-b-full bg-gradient-to-r from-primary/80 via-primary to-transparent opacity-0 transition group-hover:opacity-100" />
-                    <CardHeader className="space-y-4 pb-0">
-                      <div
-                        className={cn(
-                          "flex h-12 w-12 items-center justify-center rounded-xl transition",
-                          role.color === "primary"
-                            ? "bg-primary/15 text-primary"
-                            : "bg-accent/15 text-accent-foreground"
-                        )}
-                      >
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div className="space-y-1">
-                        <CardTitle className="text-xl font-semibold">
-                          {role.title}
-                        </CardTitle>
-                        <CardDescription className="text-sm leading-relaxed text-muted-foreground">
-                          {role.description}
-                        </CardDescription>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="flex-1" />
-                    <CardFooter className="pt-0 flex flex-col gap-2">
-                      <div className="flex gap-2 w-full">
-                        <Button
-                          variant="default"
-                          className="flex-1 transition gap-2 bg-primary hover:bg-primary/90"
-                          size={isMobile ? "lg" : "default"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const roleData = demoRoles.find((r) => r.id === role.id);
-                            if (roleData) {
-                              useAppStore.getState().setSelectedRole(roleData);
-                              navigate("/demo-chat");
-                            }
-                          }}
+                      )}
+                    >
+                      <div className="absolute inset-x-8 top-0 h-1 rounded-b-full bg-gradient-to-r from-primary/80 via-primary to-transparent opacity-0 transition group-hover:opacity-100" />
+                      <CardHeader className="space-y-4 pb-0">
+                        <div
+                          className={cn(
+                            "flex h-12 w-12 items-center justify-center rounded-xl transition",
+                            role.color === "primary"
+                              ? "bg-primary/15 text-primary"
+                              : "bg-accent/15 text-accent-foreground"
+                          )}
                         >
-                          <MessageSquare className="h-4 w-4" />
-                          Chat
-                        </Button>
-                        <Button
-                          variant="default"
-                          className="flex-1 transition gap-2 bg-accent hover:bg-accent/90"
-                          size={isMobile ? "lg" : "default"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const roleData = demoRoles.find((r) => r.id === role.id);
-                            if (roleData) {
-                              useAppStore.getState().setSelectedRole(roleData);
-                              navigate("/demo-call");
-                            }
-                          }}
-                        >
-                          <Phone className="h-4 w-4" />
-                          Call
-                        </Button>
-                      </div>
-                    </CardFooter>
-                  </Card>
-                );
-              })}
-            </div>
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div className="space-y-1">
+                          <CardTitle className="text-xl font-semibold">
+                            {role.title}
+                          </CardTitle>
+                          {/* <CardDescription className="text-sm leading-relaxed text-muted-foreground">
+                            {role.description}
+                          </CardDescription> */}
+                          <CardDescription className="text-sm leading-relaxed text-muted-foreground">
+                            {expandedRoles[role.id] || !isLongText(role.description)
+                              ? role.description
+                              : `${role.description.slice(0, MAX_LENGTH)}...`}
+
+                            {isLongText(role.description) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleReadMore(role.id);
+                                }}
+                                className="ml-1 text-primary text-xs font-medium hover:underline"
+                              >
+                                {expandedRoles[role.id] ? "Read less" : "Read more"}
+                              </button>
+                            )}
+                          </CardDescription>
+
+                        </div>
+                      </CardHeader>
+                      <CardContent className="flex-1" />
+                      <CardFooter className="pt-0 flex flex-col gap-2">
+                        <div className="flex gap-2 w-full">
+                          <Button
+                            variant="default"
+                            className="flex-1 transition gap-2 bg-primary hover:bg-primary/90"
+                            size={isMobile ? "lg" : "default"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const roleData = roles.find((r) => r.id === role.id);
+                              if (roleData) {
+                                useAppStore.getState().setSelectedRole(roleData);
+                                navigate("/demo-chat");
+                              }
+                            }}
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                            Chat
+                          </Button>
+                          <Button
+                            variant="default"
+                            className="flex-1 transition gap-2 bg-accent hover:bg-accent/90"
+                            size={isMobile ? "lg" : "default"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const roleData = roles.find((r) => r.id === role.id);
+                              if (roleData) {
+                                useAppStore.getState().setSelectedRole(roleData);
+                                navigate("/demo-call");
+                              }
+                            }}
+                          >
+                            <Phone className="h-4 w-4" />
+                            Call
+                          </Button>
+                        </div>
+                      </CardFooter>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
 
             <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 px-6 py-5">
               <div className="space-y-2 text-center">

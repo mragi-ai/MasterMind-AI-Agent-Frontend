@@ -1,5 +1,12 @@
 .feature-card {
-  @apply p-8 glass-effect border-2 border-transparent hover:border-primary/20 transition-all duration-300 relative;
+  @apply p-8 glass-effect border-2 border-transparent hover:border-primary/30 transition-all duration-300 relative;
+  background: linear-gradient(to bottom, hsl(var(--card)), hsl(var(--card) / 0.98));
+  box-shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.05), 0 2px 4px -1px hsl(0 0% 0% / 0.03);
+}
+
+.feature-card:hover {
+  box-shadow: 0 10px 15px -3px hsl(0 0% 0% / 0.08), 0 4px 6px -2px hsl(0 0% 0% / 0.05);
+  transform: translateY(-4px);
 }
 
 .feature-icon {

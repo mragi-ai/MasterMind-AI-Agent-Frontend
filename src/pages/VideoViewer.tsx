@@ -86,11 +86,11 @@ export default function VideoViewer() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const selectedRole = useAppStore((state) => state.selectedRole);
-  
+
   const videoId = searchParams.get("v");
   const videoUrl = searchParams.get("url");
   const title = searchParams.get("title");
-  
+
   const [video, setVideo] = useState<VideoSearchResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
@@ -230,7 +230,7 @@ export default function VideoViewer() {
               <h1 className="mb-6 text-2xl font-semibold leading-tight text-foreground lg:text-3xl">
                 {video.title}
               </h1>
-              
+
               <VideoPlayer
                 ref={playerRef}
                 videoId={video.video_id}

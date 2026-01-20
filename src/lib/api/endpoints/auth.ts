@@ -1,5 +1,9 @@
 import { api } from "@/lib/api/request";
 
+export async function logout(): Promise<void> {
+  await api.post("auth/logout", {});
+}
+
 export type LoginRequest = {
   email: string;
   password: string;
@@ -17,7 +21,7 @@ export async function login(body: LoginRequest): Promise<LoginResponse> {
   if (res?.token) {
     try {
       localStorage.setItem("token", res.token);
-    } catch {}
+    } catch { }
   }
   return res;
 }
@@ -64,6 +68,78 @@ export async function loginWithMicrosoft(
 ): Promise<MicrosoftSSOResponse> {
   return api.post<MicrosoftSSOResponse, MicrosoftSSORequest>(
     "auth/microsoft",
+    body
+  );
+}
+
+export type UserProfileResponse = {
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+  email: string;
+  password?: string;
+  [key: string]: any;
+};
+
+export async function getUserProfile(): Promise<UserProfileResponse> {
+  return api.get<UserProfileResponse>("auth/me");
+}
+
+export type UpdateUserProfileRequest = {
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+};
+
+export async function updateUserProfile(
+  body: UpdateUserProfileRequest,
+  config?: any
+): Promise<UserProfileResponse> {
+  return api.put<UserProfileResponse, UpdateUserProfileRequest>(
+    "auth/profile",
+    body,
+    config
+  );
+}
+
+
+
+
+export type ChangePasswordRequest = {
+  old_password: string;
+  new_password: string;
+};
+
+export type ChangePasswordResponse = {
+  message?: string;
+  [key: string]: any;
+};
+
+export async function changePassword(
+  body: ChangePasswordRequest
+): Promise<ChangePasswordResponse> {
+  return api.post<ChangePasswordResponse, ChangePasswordRequest>(
+    "auth/change-password",
+    body
+  );
+}
+
+export type ResetPasswordRequest = {
+  token: string;
+  new_password: string;
+};
+
+export type ResetPasswordResponse = {
+  message?: string;
+  [key: string]: any;
+};
+
+export async function resetPassword(
+  body: ResetPasswordRequest
+): Promise<ResetPasswordResponse> {
+  console.log("Authenticating resetPassword API call with:", body); // Debug log
+  return api.post<ResetPasswordResponse, ResetPasswordRequest>(
+    "auth/reset-password",
     body
   );
 }

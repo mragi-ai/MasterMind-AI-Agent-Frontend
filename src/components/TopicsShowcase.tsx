@@ -1,9 +1,11 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Play, CheckCircle2, Clock, X, Maximize2, Minimize2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { getAllVideos, getVideoProgress, saveVideoProgress } from "@/lib/api/endpoints/videos";
+import { getUser } from "@/lib/auth";
 
 type Topic = {
   id: string;
@@ -15,144 +17,219 @@ type Topic = {
   videoThumb: string;
   videoSrc: string;
   prompt: string;
+  videoDuration?: number; // Duration in seconds
+  savedTime?: number; // Saved progress time in seconds
   steps?: Array<{
     title: string;
     description?: string;
     src: string;
     poster?: string;
+    startTime?: number; // Start time in seconds for this step
   }>;
 };
 
-const initialTopics: Topic[] = [
-  {
-    id: "container",
-    title: "Container Availability Check",
-    description: "Learn the complete process step-by-step",
-    progress: 75,
-    totalSteps: 8,
-    completedSteps: 6,
-    videoThumb:
-      "https://images.unsplash.com/photo-1494412574643-ff11b0a5c1c3?w=400&h=225&fit=crop",
-    videoSrc:
-      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-    prompt: "How do I check container availability?",
-    steps: [
-      {
-        title: "Overview",
-        description: "What container availability means",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-      },
-      {
-        title: "Search",
-        description: "Find containers in the portal",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-      },
-      {
-        title: "Filters",
-        description: "Apply filters and interpret results",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-      },
-      {
-        title: "Booking",
-        description: "Book selected containers",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-      },
-    ],
-  },
-  {
-    id: "billing",
-    title: "Billing Dispute Tickets",
-    description: "How to create and track disputes",
-    progress: 40,
-    totalSteps: 6,
-    completedSteps: 2,
-    videoThumb:
-      "https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=225&fit=crop",
-    videoSrc:
-      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-    prompt: "How do I create a billing dispute?",
-    steps: [
-      {
-        title: "Intro",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-      },
-      {
-        title: "Create Ticket",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-      },
-      {
-        title: "Attach Docs",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-      },
-    ],
-  },
-  {
-    id: "tracking",
-    title: "Last-Mile Driver Tracking",
-    description: "Real-time location and updates",
-    progress: 100,
-    totalSteps: 5,
-    completedSteps: 5,
-    videoThumb:
-      "https://images.unsplash.com/photo-1566933293069-b55c7f326dd4?w=400&h=225&fit=crop",
-    videoSrc:
-      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    prompt: "How do I track last-mile drivers?",
-    steps: [
-      {
-        title: "Live Map",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-      },
-      {
-        title: "Notifications",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4",
-      },
-      {
-        title: "History",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
-      },
-      {
-        title: "Export",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
-      },
-      {
-        title: "Alerts",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-      },
-    ],
-  },
-  {
-    id: "dispatch",
-    title: "Dispatch Process Overview",
-    description: "Complete workflow guide",
-    progress: 0,
-    totalSteps: 10,
-    completedSteps: 0,
-    videoThumb:
-      "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&h=225&fit=crop",
-    videoSrc:
-      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-    prompt: "Show me the dispatch process",
-    steps: [
-      {
-        title: "Pipeline",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-      },
-      {
-        title: "Assign",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-      },
-      {
-        title: "Handover",
-        src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-      },
-    ],
-  },
-];
+// Helper function to convert time string (HH:MM:SS) to seconds
+function timeToSeconds(timeStr: string): number {
+  const parts = timeStr.split(":").map(Number);
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  return 0;
+}
+
+// Helper function to convert duration string (HH:MM:SS) to seconds
+function durationToSeconds(duration: string): number {
+  return timeToSeconds(duration);
+}
 
 export default function TopicsShowcase() {
-  const [topics, setTopics] = useState<Topic[]>(initialTopics);
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [activeTopic, setActiveTopic] = useState<Topic | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const progressSaveTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const topicsRef = useRef<Topic[]>([]);
+  const activeTopicRef = useRef<Topic | null>(null);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    topicsRef.current = topics;
+  }, [topics]);
+
+  useEffect(() => {
+    activeTopicRef.current = activeTopic;
+  }, [activeTopic]);
+
+  // Function to process videos and map to Topic format
+  const processVideos = async (response: Awaited<ReturnType<typeof getAllVideos>>) => {
+    const user = getUser<{ user_id?: string }>();
+    const userId = user?.user_id || "";
+    console.log("User ID:", userId);
+
+    // Handle different response structures
+    const videos = response.videos || (Array.isArray(response) ? response : []);
+    console.log(`Processing ${videos.length} videos`);
+
+    // Fetch progress for each video
+    const topicsWithProgress = await Promise.all(
+      videos.map(async (video) => {
+        console.log("Processing video:", video._id, video.title);
+        let progress = 0;
+        let savedTime = 0;
+
+        const youtubeUrl = video.youtube_url || "";
+
+        if (userId && youtubeUrl) {
+          try {
+            const progressData = await getVideoProgress(userId, youtubeUrl);
+            savedTime = progressData.time || 0;
+            const totalDuration = durationToSeconds(video.duration || "00:00:00");
+            if (totalDuration > 0) {
+              progress = Math.round((savedTime / totalDuration) * 100);
+            }
+          } catch (error) {
+            console.error(`Failed to fetch progress for video ${video._id}:`, error);
+          }
+        }
+
+        // Convert timestamps to steps
+        const videoDuration = durationToSeconds(video.duration || "00:00:00");
+        const steps =
+          video.timestamps && video.timestamps.length > 0
+            ? video.timestamps.map((ts, index) => {
+              // Extract YouTube video ID and create embed URL
+              const youtubeId = youtubeUrl
+                ? youtubeUrl.match(
+                  /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/
+                )?.[1]
+                : null;
+              const startTime = timeToSeconds(ts.time || "00:00:00");
+              const embedUrl = youtubeId
+                ? `https://www.youtube.com/embed/${youtubeId}?start=${startTime}`
+                : youtubeUrl || "";
+
+              return {
+                title: ts.label || `Step ${index + 1}`,
+                description: ts.label || "",
+                src: embedUrl,
+                poster: video.thumbnail_url || "",
+                startTime,
+              };
+            })
+            : [
+              {
+                title: video.title || "Video",
+                description: video.description || "",
+                src: youtubeUrl || "",
+                poster: video.thumbnail_url || "",
+                startTime: 0,
+              },
+            ];
+
+        const totalSteps = steps.length;
+        const completedSteps = Math.round((progress / 100) * totalSteps);
+
+        return {
+          id: video._id,
+          title: video.title || "Untitled Video",
+          description: video.description || "",
+          progress,
+          totalSteps,
+          completedSteps,
+          videoThumb: video.thumbnail_url || "",
+          videoSrc: youtubeUrl,
+          prompt: `Tell me about ${video.title || "this video"}`,
+          videoDuration,
+          savedTime, // Store the saved time for resuming
+          steps,
+        } as Topic;
+      })
+    );
+
+    return topicsWithProgress;
+  };
+
+  // Fetch videos from API and map to Topic format
+  useEffect(() => {
+    async function fetchVideos() {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log("Fetching videos from API...");
+        const response = await getAllVideos();
+        console.log("Received videos response:", response);
+        console.log("Response structure:", {
+          hasResponse: !!response,
+          count: response?.count,
+          videosLength: response?.videos?.length,
+          videosType: typeof response?.videos,
+          fullResponse: JSON.stringify(response, null, 2),
+        });
+
+        // Check if response is valid
+        if (!response) {
+          console.error("No response received from API");
+          setError("Failed to receive response from the server. Please check your connection.");
+          setTopics([]);
+          setLoading(false);
+          return;
+        }
+
+        // Handle different response structures
+        const videos = response.videos || (Array.isArray(response) ? response : []);
+
+        if (!videos || videos.length === 0) {
+          console.warn("No videos found in API response. Response:", response);
+          setError("No videos available at the moment. Please try again later.");
+          setTopics([]);
+          setLoading(false);
+          return;
+        }
+
+        console.log(`Found ${videos.length} videos to process`);
+
+        // Create a normalized response object
+        const normalizedResponse = {
+          ...response,
+          videos: videos,
+        };
+
+        const topicsWithProgress = await processVideos(normalizedResponse);
+        console.log("Successfully processed topics:", topicsWithProgress.length);
+        setTopics(topicsWithProgress);
+      } catch (error: any) {
+        console.error("Failed to fetch videos:", error);
+        console.error("Error details:", {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          stack: error.stack,
+        });
+
+        // Set user-friendly error message
+        const errorMessage = error.response?.status === 404
+          ? "Videos endpoint not found. Please check the API configuration."
+          : error.response?.status === 403 || error.response?.status === 401
+            ? "Access denied. Please check your authentication."
+            : error.message?.includes("Network") || error.code === "ERR_NETWORK"
+              ? "Network error. Please check your internet connection."
+              : "Failed to load videos. Please try again later.";
+
+        setError(errorMessage);
+        setTopics([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchVideos();
+
+    // Cleanup timers on unmount
+    return () => {
+      progressSaveTimers.current.forEach((timer) => clearTimeout(timer));
+      progressSaveTimers.current.clear();
+    };
+  }, []);
 
   const openChat = (prompt: string) => {
     window.dispatchEvent(
@@ -169,24 +246,73 @@ export default function TopicsShowcase() {
     setActiveTopic(null);
   };
 
-  const handleProgressUpdate = (id: string, progress: number) => {
+  const handleProgressUpdate = useCallback((id: string, progress: number, currentTime: number) => {
+    // Update local state immediately for responsive UI
     setTopics((prev) =>
       prev.map((topic) =>
         topic.id === id
           ? {
-              ...topic,
-              progress: progress,
-              completedSteps: Math.round((progress / 100) * topic.totalSteps),
-            }
+            ...topic,
+            progress: progress,
+            completedSteps: Math.round((progress / 100) * topic.totalSteps),
+            savedTime: currentTime, // Update saved time
+          }
           : topic
       )
     );
-  };
+
+    // Update active topic if it matches
+    setActiveTopic((prev) => {
+      if (prev?.id === id) {
+        return {
+          ...prev,
+          progress: progress,
+          completedSteps: Math.round((progress / 100) * prev.totalSteps),
+          savedTime: currentTime, // Update saved time
+        };
+      }
+      return prev;
+    });
+
+    // Throttle API calls - clear existing timer and set new one
+    const existingTimer = progressSaveTimers.current.get(id);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    // Save progress to API after 3 seconds of no updates (debounced)
+    const timer = setTimeout(async () => {
+      // Use refs to get latest state
+      const topic = topicsRef.current.find((t) => t.id === id) ||
+        (activeTopicRef.current?.id === id ? activeTopicRef.current : null);
+
+      if (topic) {
+        const user = getUser<{ user_id?: string }>();
+        const userId = user?.user_id;
+        if (userId && topic.videoSrc) {
+          try {
+            await saveVideoProgress({
+              userid: userId,
+              video: topic.videoSrc,
+              time: currentTime,
+            });
+          } catch (error) {
+            console.error("Failed to save video progress:", error);
+          }
+        }
+      }
+
+      progressSaveTimers.current.delete(id);
+    }, 3000);
+
+    progressSaveTimers.current.set(id, timer);
+  }, []); // Empty deps - we use functional updates to avoid stale closures
 
   return (
     <section className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <Card className="p-10 glass-effect shadow-custom-lg border-2 overflow-hidden relative">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+      <Card className="p-10 glass-effect shadow-custom-lg border-2 overflow-hidden relative bg-gradient-to-br from-white via-primary/2 to-accent/2">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-accent/8 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
 
         <div className="relative">
           <div className="mb-8">
@@ -198,16 +324,61 @@ export default function TopicsShowcase() {
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-6">
-            {topics.map((topic) => (
-              <TopicCard
-                key={topic.id}
-                topic={topic}
-                onAction={handleStartOrResume}
-                onOpenChat={openChat}
-              />
-            ))}
-          </div>
+          {loading ? (
+            <div className="flex justify-center items-center py-12">
+              {/* <p className="text-muted-foreground">Loading videos...</p> */}
+              <div className="h-8 w-8 border-4 border-gray-300 border-t-primary rounded-full animate-spin"></div>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <p className="text-destructive mb-2">{error}</p>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  setError(null);
+                  setLoading(true);
+                  try {
+                    const response = await getAllVideos();
+                    if (response?.videos && response.videos.length > 0) {
+                      const topicsWithProgress = await processVideos(response);
+                      setTopics(topicsWithProgress);
+                      setError(null);
+                    } else {
+                      setError("No videos available");
+                    }
+                  } catch (err: any) {
+                    const errorMessage = err.response?.status === 404
+                      ? "Videos endpoint not found. Please check the API configuration."
+                      : err.response?.status === 403 || err.response?.status === 401
+                        ? "Access denied. Please check your authentication."
+                        : err.message?.includes("Network") || err.code === "ERR_NETWORK"
+                          ? "Network error. Please check your internet connection."
+                          : "Failed to load videos. Please try again later.";
+                    setError(errorMessage);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : topics.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">No videos available</p>
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-6">
+              {topics.map((topic) => (
+                <TopicCard
+                  key={topic.id}
+                  topic={topic}
+                  onAction={handleStartOrResume}
+                  onOpenChat={openChat}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </Card>
 
@@ -242,12 +413,13 @@ function TopicCard({
   return (
     <Card className="topic-card overflow-hidden hover-lift transition-all duration-300">
       {/* Video thumbnail */}
-      <div className="relative aspect-video overflow-hidden bg-black">
+      <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-muted to-muted/50 rounded-t-lg">
         <img
           src={topic.videoThumb}
           alt={topic.title}
           className="absolute inset-0 w-full h-full object-cover"
         />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
 
         {/* Restored circular progress ring */}
         {topic.progress > 0 && (
@@ -263,8 +435,8 @@ function TopicCard({
 
         {/* Play overlay */}
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-14 h-14 rounded-full bg-primary/90 backdrop-blur flex items-center justify-center shadow-lg">
-            <Play className="h-6 w-6 text-white ml-1" fill="currentColor" />
+          <div className="w-16 h-16 rounded-full bg-primary backdrop-blur-md flex items-center justify-center shadow-xl ring-4 ring-primary/20 hover:scale-110 transition-transform">
+            <Play className="h-7 w-7 text-white ml-1" fill="currentColor" />
           </div>
         </div>
       </div>
@@ -327,7 +499,7 @@ function VideoPopupWithSafeClose({
 }: {
   topic: Topic;
   onCloseRequested: () => void;
-  onProgressUpdate: (id: string, progress: number) => void;
+  onProgressUpdate: (id: string, progress: number, currentTime: number) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -336,20 +508,160 @@ function VideoPopupWithSafeClose({
   const steps = (topic.steps && topic.steps.length > 0)
     ? topic.steps
     : [
-        {
-          title: topic.title,
-          description: topic.description,
-          src: topic.videoSrc,
-          poster: topic.videoThumb,
-        },
-      ];
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [currentStepPercent, setCurrentStepPercent] = useState(0);
+      {
+        title: topic.title,
+        description: topic.description,
+        src: topic.videoSrc,
+        poster: topic.videoThumb,
+      },
+    ];
+  // Initialize step index based on saved progress
+  const getInitialStepIndex = () => {
+    if (!topic.savedTime || topic.savedTime === 0) return 0;
 
-  // progress tracking across steps
+    // Find which step the saved time corresponds to
+    for (let i = steps.length - 1; i >= 0; i--) {
+      const stepStartTime = steps[i]?.startTime || 0;
+      if (topic.savedTime >= stepStartTime) {
+        return i;
+      }
+    }
+    return 0;
+  };
+
+  const initialStepIndex = getInitialStepIndex();
+  const [currentStepIndex, setCurrentStepIndex] = useState(initialStepIndex);
+
+  // For YouTube videos, update the embed URL to start from saved time
+  const getYouTubeEmbedUrl = (stepIndex: number, savedTime?: number) => {
+    const step = steps[stepIndex];
+    if (!step) return "";
+
+    const youtubeId = topic.videoSrc.match(
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/
+    )?.[1];
+
+    if (!youtubeId) return step.src || "";
+
+    // If this is the initial step and we have saved time, use saved time
+    // Otherwise use the step's start time
+    let startTime = step.startTime || 0;
+    if (stepIndex === initialStepIndex && savedTime && savedTime > 0) {
+      startTime = savedTime;
+    }
+
+    return `https://www.youtube.com/embed/${youtubeId}?start=${Math.floor(startTime)}`;
+  };
+
+  const [currentStepPercent, setCurrentStepPercent] = useState(0);
+  const isYouTubeVideo = topic.videoSrc.includes("youtube.com") || topic.videoSrc.includes("youtu.be");
+
+  // Store onProgressUpdate in a ref to avoid dependency issues
+  const onProgressUpdateRef = useRef(onProgressUpdate);
   useEffect(() => {
+    onProgressUpdateRef.current = onProgressUpdate;
+  }, [onProgressUpdate]);
+
+  // Resume video from saved progress when it loads
+  useEffect(() => {
+    if (isYouTubeVideo) {
+      // For YouTube videos, we've already set the step index based on saved time
+      // The embed URL will start from the saved time
+      return;
+    }
+
     const video = videoRef.current;
     if (!video) return;
+
+    // If no saved time, start from beginning
+    if (!topic.savedTime || topic.savedTime === 0) {
+      return;
+    }
+
+    // Wait for video metadata to load before setting currentTime
+    const handleLoadedMetadata = () => {
+      if (video.duration > 0 && topic.savedTime) {
+        // For videos with steps, savedTime is absolute time
+        // For videos without steps, savedTime is also absolute time
+        if (steps.length > 1 && steps[0]?.startTime !== undefined) {
+          // Video has steps - find which step and calculate relative time
+          let targetStepIndex = 0;
+          for (let i = steps.length - 1; i >= 0; i--) {
+            const stepStartTime = steps[i]?.startTime || 0;
+            if (topic.savedTime >= stepStartTime) {
+              targetStepIndex = i;
+              break;
+            }
+          }
+
+          // Set the step index
+          setCurrentStepIndex(targetStepIndex);
+
+          // Calculate time within the current step
+          const stepStartTime = steps[targetStepIndex]?.startTime || 0;
+          const stepTime = topic.savedTime - stepStartTime;
+
+          // Set video time to resume position (relative to step start)
+          video.currentTime = Math.max(0, stepTime);
+
+          // Calculate initial progress percentage for the step
+          const nextStepTime = steps[targetStepIndex + 1]?.startTime || video.duration;
+          const stepDuration = nextStepTime - stepStartTime;
+          if (stepDuration > 0) {
+            const stepPercent = Math.round((stepTime / stepDuration) * 100);
+            setCurrentStepPercent(Math.max(0, Math.min(100, stepPercent)));
+          }
+        } else {
+          // Video without steps - savedTime is direct currentTime
+          video.currentTime = Math.min(topic.savedTime, video.duration);
+          const percent = video.duration > 0
+            ? Math.round((video.currentTime / video.duration) * 100)
+            : 0;
+          setCurrentStepPercent(percent);
+        }
+      }
+    };
+
+    if (video.readyState >= 1) {
+      // Metadata already loaded
+      handleLoadedMetadata();
+    } else {
+      video.addEventListener("loadedmetadata", handleLoadedMetadata);
+      return () => {
+        video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      };
+    }
+  }, [isYouTubeVideo, topic.savedTime, topic.id, steps]);
+
+  // progress tracking across steps (only for non-YouTube videos)
+  useEffect(() => {
+    if (isYouTubeVideo) {
+      // For YouTube videos, we track progress based on step completion
+      // Only update when step index changes, not on every render
+      const currentStep = steps[currentStepIndex];
+      const stepStartTime = currentStep?.startTime || 0;
+      const videoDuration = topic.videoDuration || 0;
+
+      // Calculate progress: if we're on a step, we've at least reached its start time
+      // Estimate that we're halfway through the current step
+      const nextStepTime = steps[currentStepIndex + 1]?.startTime || videoDuration;
+      const estimatedCurrentTime = stepStartTime + (nextStepTime - stepStartTime) * 0.5;
+
+      const overall = videoDuration > 0
+        ? Math.round((estimatedCurrentTime / videoDuration) * 100)
+        : Math.round(((currentStepIndex + 1) / steps.length) * 100);
+
+      // Use ref to avoid dependency on onProgressUpdate
+      onProgressUpdateRef.current(topic.id, overall, estimatedCurrentTime);
+      return;
+    }
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Throttle progress updates to avoid too many API calls
+    let lastSaveTime = 0;
+    const SAVE_INTERVAL = 5000; // Save every 5 seconds
 
     const handleTimeUpdate = () => {
       const duration = video.duration || 0;
@@ -359,7 +671,19 @@ function VideoPopupWithSafeClose({
         const overall = Math.round(
           ((currentStepIndex + percent / 100) / steps.length) * 100
         );
-        onProgressUpdate(topic.id, overall);
+
+        // Calculate absolute time for saving
+        // For videos with steps, absolute time = step start time + current time in step
+        // For videos without steps, absolute time = current time
+        const stepStartTime = steps[currentStepIndex]?.startTime || 0;
+        const absoluteTime = stepStartTime + video.currentTime;
+
+        // Save progress periodically (throttled to avoid too many API calls)
+        const now = Date.now();
+        if (now - lastSaveTime >= SAVE_INTERVAL) {
+          onProgressUpdateRef.current(topic.id, overall, absoluteTime);
+          lastSaveTime = now;
+        }
       }
     };
 
@@ -368,7 +692,11 @@ function VideoPopupWithSafeClose({
         setCurrentStepIndex((i) => i + 1);
         setCurrentStepPercent(0);
       } else {
-        onProgressUpdate(topic.id, 100);
+        // Save final progress - use absolute time (video duration)
+        const duration = video.duration || 0;
+        const stepStartTime = steps[currentStepIndex]?.startTime || 0;
+        const absoluteTime = stepStartTime + duration;
+        onProgressUpdateRef.current(topic.id, 100, absoluteTime);
       }
     };
 
@@ -379,7 +707,7 @@ function VideoPopupWithSafeClose({
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [topic.id, currentStepIndex, steps.length, onProgressUpdate]);
+  }, [topic.id, currentStepIndex, steps.length, isYouTubeVideo, topic.videoDuration, steps]);
 
   // Notify globally that video steps modal is open/closed
   useEffect(() => {
@@ -405,11 +733,33 @@ function VideoPopupWithSafeClose({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // start closing: pause video, set isClosing so animation runs,
+  // start closing: pause video, save final progress, set isClosing so animation runs,
   // then when animation completes we'll tell parent to remove component.
-  const startClose = () => {
+  const startClose = async () => {
     const v = videoRef.current;
     if (v && !v.paused) v.pause();
+
+    // Save final progress before closing
+    if (!isYouTubeVideo && v) {
+      const duration = v.duration || 0;
+      const currentTime = v.currentTime || 0;
+      const percent = duration > 0 ? Math.round((currentTime / duration) * 100) : 0;
+      const overall = Math.round(((currentStepIndex + percent / 100) / steps.length) * 100);
+      // Calculate absolute time (step start + current time in step)
+      const stepStartTime = steps[currentStepIndex]?.startTime || 0;
+      const absoluteTime = stepStartTime + currentTime;
+      onProgressUpdateRef.current(topic.id, overall, absoluteTime);
+    } else if (isYouTubeVideo) {
+      // For YouTube, save based on current step's start time
+      const step = steps[currentStepIndex];
+      const stepStartTime = step?.startTime || 0;
+      const videoDuration = topic.videoDuration || 0;
+      const overall = videoDuration > 0
+        ? Math.round((stepStartTime / videoDuration) * 100)
+        : Math.round(((currentStepIndex + 1) / steps.length) * 100);
+      onProgressUpdateRef.current(topic.id, overall, stepStartTime);
+    }
+
     setIsClosing(true);
   };
 
@@ -417,13 +767,25 @@ function VideoPopupWithSafeClose({
     if (index < 0 || index >= steps.length) return;
     setCurrentStepIndex(index);
     setCurrentStepPercent(0);
-    const v = videoRef.current;
-    if (v) {
-      v.currentTime = 0;
-      // allow React to switch src before playing
-      setTimeout(() => {
-        v.play().catch(() => {});
-      }, 0);
+
+    // For YouTube videos, update progress when step changes
+    if (isYouTubeVideo) {
+      const step = steps[index];
+      const stepStartTime = step?.startTime || 0;
+      const videoDuration = topic.videoDuration || 0;
+      const overall = videoDuration > 0
+        ? Math.round((stepStartTime / videoDuration) * 100)
+        : Math.round(((index + 1) / steps.length) * 100);
+      onProgressUpdateRef.current(topic.id, overall, stepStartTime);
+    } else {
+      const v = videoRef.current;
+      if (v) {
+        v.currentTime = 0;
+        // allow React to switch src before playing
+        setTimeout(() => {
+          v.play().catch(() => { });
+        }, 0);
+      }
     }
   };
 
@@ -459,6 +821,17 @@ function VideoPopupWithSafeClose({
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
+  // Hide browser scrollbar when modal is open
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+
+
   // variants for nice open/close
   const backdropVariants = {
     open: { opacity: 1 },
@@ -480,7 +853,7 @@ function VideoPopupWithSafeClose({
 
   return (
     <motion.div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50"
       variants={backdropVariants}
       initial="open"
       animate={isClosing ? "closed" : "open"}
@@ -488,7 +861,7 @@ function VideoPopupWithSafeClose({
     >
       <motion.div
         ref={containerRef}
-        className="relative bg-white overflow-hidden shadow-2xl w-screen h-screen max-w-none rounded-none flex flex-col"
+        className="relative bg-gradient-to-br from-white via-primary/5 to-accent/5 overflow-hidden shadow-2xl w-screen h-screen max-w-none rounded-none flex flex-col"
         variants={panelVariants}
         initial="open"
         animate={isClosing ? "closed" : "open"}
@@ -528,13 +901,12 @@ function VideoPopupWithSafeClose({
                   <button
                     key={s.title + i}
                     onClick={() => goToStep(i)}
-                    className={`text-sm px-3 py-1.5 rounded-full border transition whitespace-nowrap ${
-                      isCurrent
-                        ? "bg-primary text-white border-primary shadow-sm"
-                        : isDone
+                    className={`text-sm px-3 py-1.5 rounded-full border transition whitespace-nowrap ${isCurrent
+                      ? "bg-primary text-white border-primary shadow-sm"
+                      : isDone
                         ? "bg-green-50 text-green-700 border-green-300"
                         : "bg-muted/50 text-muted-foreground border-border"
-                    }`}
+                      }`}
                   >
                     {i + 1}. {s.title}
                   </button>
@@ -543,13 +915,27 @@ function VideoPopupWithSafeClose({
             </div>
           </div>
 
-          <video
-            ref={videoRef}
-            src={steps[currentStepIndex].src}
-            controls
-            autoPlay
-            className="w-full max-h-[60vh] sm:max-h-[70vh] md:h-[calc(100vh-260px)] object-contain bg-black"
-          />
+          {/* Check if it's a YouTube URL and render iframe, otherwise use video element */}
+          {isYouTubeVideo ? (
+            <div className="w-full  h-[calc(100vh-260px)] bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center rounded-lg overflow-hidden shadow-inner">
+              <iframe
+                src={getYouTubeEmbedUrl(currentStepIndex, topic.savedTime)}
+                className="w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                title={steps[currentStepIndex].title}
+                key={`${currentStepIndex}-${topic.savedTime}`} // Force re-render when step or saved time changes
+              />
+            </div>
+          ) : (
+            <video
+              ref={videoRef}
+              src={steps[currentStepIndex].src}
+              controls
+              autoPlay
+              className="w-full max-h-[60vh] sm:max-h-[70vh] md:h-[calc(100vh-260px)] object-contain bg-gradient-to-br from-muted to-muted/50 rounded-lg shadow-inner"
+            />
+          )}
         </div>
 
         <div className="p-4 border-t bg-background/70 backdrop-blur sticky bottom-0">

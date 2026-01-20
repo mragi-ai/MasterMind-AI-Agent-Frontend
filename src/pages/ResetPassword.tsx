@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { resetPassword } from "@/lib/api/endpoints/auth";
 import { Eye, EyeOff, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,6 +22,8 @@ export default function ResetPassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isMobile = useIsMobile();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token");
 
   const navigate = useNavigate();
 
@@ -54,18 +57,28 @@ export default function ResetPassword() {
       return;
     }
 
+    if (!token) {
+      toast.error("Invalid reset link. Token is missing.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
-      // 🔐 Simulate password reset API call
-      console.log("Password reset request:", { newPassword });
-      await new Promise((res) => setTimeout(res, 1500));
+      // 🔐 Call password reset API
+      await resetPassword({
+        token,
+        new_password: newPassword,
+      });
 
-      toast("Password successfully reset!");
-      navigate("/");
+      toast.success("Password has been reset successfully. Please login.");
+      // Small delay to ensure user sees success and network tab logs before nav
+      setTimeout(() => {
+        navigate("/");
+      }, 2000);
     } catch (error) {
       console.error("Password reset failed:", error);
-      alert("Failed to reset password. Please try again.");
+      toast.error("Failed to reset password. Please try again or request a new link.");
     } finally {
       setIsSubmitting(false);
     }

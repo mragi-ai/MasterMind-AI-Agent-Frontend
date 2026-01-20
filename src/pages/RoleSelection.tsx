@@ -21,9 +21,10 @@ import { cn } from "@/lib/utils";
 import useAppStore from "@/zustand";
 import { UserMenu } from "@/components/UserMenu";
 import { clearAuth } from "@/lib/auth";
+import { logout } from "@/lib/api/endpoints/auth";
 
 type Role = {
-  id: number;
+  id: string;
   title: string;
   description: string;
   icon: React.ElementType;
@@ -33,7 +34,7 @@ type Role = {
 
 const roles: Role[] = [
   {
-    id: 1,
+    id: "695b8cc6566a1ea150da303c",
     title: "Carrier Representative",
     description:
       "Coordinate with carriers, oversee loads, and keep freight moving on schedule.",
@@ -42,7 +43,7 @@ const roles: Role[] = [
     role: "carrier_representative",
   },
   {
-    id: 2,
+    id: "695b8c9d566a1ea150da303b",
     title: "Customer Representative",
     description:
       "Support shippers and receivers, deliver proactive updates, and resolve issues fast.",
@@ -51,7 +52,7 @@ const roles: Role[] = [
     role: "customer_representative",
   },
   {
-    id: 3,
+    id: "695b8d76566a1ea150da303d",
     title: "Agent Manager",
     description:
       "Orchestrate agent performance, monitor KPIs, and deliver operational insights.",
@@ -65,11 +66,11 @@ export default function RoleSelection() {
   const navigate = useNavigate();
   const isMobile = useMediaQuery("(max-width: 768px)");
   const storedRole = useAppStore((state) => state.selectedRole);
-  const [selectedRole, setSelectedRole] = useState<number | null>(
+  const [selectedRole, setSelectedRole] = useState<string | null>(
     storedRole?.id || null
   );
 
-  const handleRoleSelect = (roleId: number) => {
+  const handleRoleSelect = (roleId: string) => {
     setSelectedRole(roleId);
   };
 
@@ -81,7 +82,12 @@ export default function RoleSelection() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
     clearAuth();
     useAppStore.getState().setSelectedRole(null);
     navigate("/");
@@ -175,7 +181,7 @@ export default function RoleSelection() {
                     className={cn(
                       "group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/80 transition duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_20px_45px_rgba(14,165,233,0.15)]",
                       isSelected &&
-                        "border-primary/60 shadow-[0_24px_60px_rgba(14,165,233,0.28)] ring-1 ring-primary/40"
+                      "border-primary/60 shadow-[0_24px_60px_rgba(14,165,233,0.28)] ring-1 ring-primary/40"
                     )}
                   >
                     <div className="absolute inset-x-8 top-0 h-1 rounded-b-full bg-gradient-to-r from-primary/80 via-primary to-transparent opacity-0 transition group-hover:opacity-100" />
@@ -185,7 +191,7 @@ export default function RoleSelection() {
                           "flex h-12 w-12 items-center justify-center rounded-xl transition",
                           role.color === "primary"
                             ? "bg-primary/15 text-primary"
-                            : "bg-accent/15 text-accent-foreground"
+                            : "bg-primary/15 text-primary"
                         )}
                       >
                         <Icon className="h-5 w-5" />
@@ -206,7 +212,7 @@ export default function RoleSelection() {
                         className={cn(
                           "w-full transition",
                           !isSelected &&
-                            "border-border/60 bg-background/80 text-foreground hover:border-primary/50 hover:text-primary"
+                          "border-border/60 bg-background/80 text-foreground hover:border-primary/50 hover:bg-muted hover:text-primary"
                         )}
                         size={isMobile ? "lg" : "default"}
                       >
@@ -230,7 +236,7 @@ export default function RoleSelection() {
               </div>
               <Button
                 size="lg"
-                className="min-w-[12rem] shadow-lg hover:shadow-xl"
+                className="min-w-[12rem] shadow-lg hover:shadow-xl hover:bg-primary/90"
                 onClick={handleStartChatting}
                 disabled={!selectedRole}
               >

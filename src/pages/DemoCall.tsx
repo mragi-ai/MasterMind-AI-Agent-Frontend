@@ -13,9 +13,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// AG2 Client WebSocket URL
-// Using your original server address - update this to match your AG2 server location
-const WEBSOCKET_URL = "ws://192.168.3.199:5050/media-stream";
+// WebSocket URL for OpenAI Realtime API bridge
+// Using ngrok URL for WebSocket connection to Python backend
+// const WEBSOCKET_URL = "wss://738002e1e676.ngrok-free.app/api/v1/client-stream";
+
+const WEBSOCKET_URL = "ws://98.93.49.166/api/v1/client-stream";
 
 // Extend the Window interface to include ag2client
 declare global {
@@ -24,6 +26,10 @@ declare global {
       WebsocketAudio: new (url: string) => {
         start: () => Promise<void>;
         stop: () => void;
+        ws?: WebSocket; // Internal WebSocket reference (if exposed)
+        onmessage?: (event: MessageEvent) => void;
+        onerror?: (event: Event) => void;
+        onopen?: (event: Event) => void;
       };
     };
   }
@@ -39,9 +45,16 @@ export default function DemoCall() {
   const [connectionStatus, setConnectionStatus] = useState<
     "disconnected" | "connecting" | "connected" | "error"
   >("disconnected");
+  const [aiResponseText, setAiResponseText] = useState<string>("");
 
-  // AG2 Client Ref
+  // WebSocket and Audio Refs
+  const wsRef = useRef<WebSocket | null>(null);
   const audioClientRef = useRef<any>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioQueueRef = useRef<ArrayBuffer[]>([]);
+  const isProcessingAudioRef = useRef(false);
+  const nextAudioStartTimeRef = useRef<number>(0);
 
   // If no role is selected, redirect to demo roles page
   useEffect(() => {
@@ -66,12 +79,32 @@ export default function DemoCall() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Cleanup WebSocket
+      if (wsRef.current) {
+        try {
+          wsRef.current.close();
+        } catch (error) {
+          console.error("Error closing WebSocket on unmount:", error);
+        }
+      }
+
+      // Cleanup AG2 client if used
       if (audioClientRef.current) {
         try {
           audioClientRef.current.stop();
         } catch (error) {
           console.error("Error stopping AG2 client on unmount:", error);
         }
+      }
+
+      // Cleanup media stream
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+
+      // Cleanup audio context
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
       }
     };
   }, []);
@@ -84,50 +117,461 @@ export default function DemoCall() {
       .padStart(2, "0")}`;
   };
 
+  // Process audio queue for playback (sequentially to avoid overlap)
+  const processAudioQueue = async () => {
+    if (isProcessingAudioRef.current || audioQueueRef.current.length === 0) {
+      return;
+    }
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+      console.log('🎵 AudioContext created, state:', audioContextRef.current.state);
+      nextAudioStartTimeRef.current = 0; // Reset start time when creating new context
+    }
+
+    const context = audioContextRef.current;
+
+    // Resume audio context if suspended (required by some browsers)
+    if (context.state === 'suspended') {
+      console.log('🎵 Resuming suspended AudioContext...');
+      await context.resume();
+      console.log('🎵 AudioContext resumed, state:', context.state);
+    }
+
+    // If nextAudioStartTime is in the past, start from current time
+    if (nextAudioStartTimeRef.current < context.currentTime) {
+      nextAudioStartTimeRef.current = context.currentTime;
+    }
+
+    isProcessingAudioRef.current = true;
+    const sampleRate = 24000; // OpenAI Realtime API uses 24kHz
+
+    while (audioQueueRef.current.length > 0) {
+      const audioBuffer = audioQueueRef.current.shift();
+      if (!audioBuffer) continue;
+
+      try {
+        // Convert PCM16 (Int16Array) to Float32Array for Web Audio API
+        const pcm16Data = new Int16Array(audioBuffer);
+        const float32Data = new Float32Array(pcm16Data.length);
+
+        // Convert Int16 (-32768 to 32767) to Float32 (-1.0 to 1.0)
+        for (let i = 0; i < pcm16Data.length; i++) {
+          float32Data[i] = Math.max(-1, Math.min(1, pcm16Data[i] / 32768.0));
+        }
+
+        // Create AudioBuffer from PCM16 data
+        const audioBufferNode = context.createBuffer(1, float32Data.length, sampleRate);
+        audioBufferNode.getChannelData(0).set(float32Data);
+
+        // Schedule audio to play at the next available time (sequential playback)
+        const startTime = nextAudioStartTimeRef.current;
+        const duration = audioBufferNode.duration;
+
+        const source = context.createBufferSource();
+        source.buffer = audioBufferNode;
+        source.connect(context.destination);
+        source.start(startTime);
+
+        // Update next start time to be right after this chunk finishes
+        nextAudioStartTimeRef.current = startTime + duration;
+
+        console.log('🔊 Scheduled audio chunk:', {
+          samples: float32Data.length,
+          duration: duration.toFixed(3) + 's',
+          startTime: startTime.toFixed(3) + 's',
+          nextStartTime: nextAudioStartTimeRef.current.toFixed(3) + 's',
+          contextState: context.state
+        });
+      } catch (error) {
+        console.error("❌ Error playing audio:", error);
+      }
+    }
+
+    isProcessingAudioRef.current = false;
+  };
+
+  // Handle OpenAI Realtime API message format
+  const handleWebSocketMessage = async (event: MessageEvent) => {
+    // Handle binary audio data (raw PCM16 bytes from backend)
+    // Can be ArrayBuffer or Blob
+    let audioBuffer: ArrayBuffer | null = null;
+
+    if (event.data instanceof ArrayBuffer) {
+      audioBuffer = event.data;
+    } else if (event.data instanceof Blob) {
+      // Convert Blob to ArrayBuffer
+      console.log("🎵 AI Agent Audio Response Received (Blob):", {
+        type: 'audio',
+        size: event.data.size,
+        bytes: `${(event.data.size / 1024).toFixed(2)} KB`,
+        timestamp: new Date().toISOString()
+      });
+      audioBuffer = await event.data.arrayBuffer();
+    }
+
+    if (audioBuffer) {
+      console.log("🎵 AI Agent Audio Response Received:", {
+        type: 'audio',
+        size: audioBuffer.byteLength,
+        bytes: `${(audioBuffer.byteLength / 1024).toFixed(2)} KB`,
+        timestamp: new Date().toISOString()
+      });
+
+      // Add to audio queue for playback
+      audioQueueRef.current.push(audioBuffer);
+      await processAudioQueue();
+      return; // Exit early after handling audio
+    }
+    // Handle text/JSON messages
+    else if (typeof event.data === 'string') {
+      try {
+        const jsonData = JSON.parse(event.data);
+        const messageType = jsonData.type;
+
+        console.log(`📨 Received message type: ${messageType}`, jsonData);
+
+        // Handle OpenAI Realtime API event types
+        switch (messageType) {
+          case 'response.output_text.delta':
+          case 'response.text.delta':
+            // Accumulate text deltas
+            const textDelta = jsonData.delta || '';
+            setAiResponseText(prev => prev + textDelta);
+            console.log("💬 AI Text Response (delta):", textDelta);
+            break;
+
+          case 'response.output_text.done':
+          case 'response.text.done':
+            // Text response complete
+            console.log("✅ AI Text Response Complete:", jsonData);
+            break;
+
+          case 'response.audio.delta':
+            // Audio delta (base64 encoded) - backend should handle this, but just in case
+            console.log("🎵 AI Audio Delta (base64):", {
+              size: jsonData.delta?.length || 0
+            });
+            break;
+
+          case 'response.audio.done':
+            console.log("✅ AI Audio Response Complete");
+            break;
+
+          case 'clear_audio':
+            // Clear audio buffer (interrupt signal)
+            console.log("🛑 Clear Audio Signal Received");
+            audioQueueRef.current = [];
+            // Reset next start time so new audio starts immediately
+            if (audioContextRef.current) {
+              nextAudioStartTimeRef.current = audioContextRef.current.currentTime;
+              // Stop all currently playing audio
+              audioContextRef.current.suspend();
+              audioContextRef.current.resume();
+            } else {
+              nextAudioStartTimeRef.current = 0;
+            }
+            break;
+
+          case 'conversation.item.created':
+            console.log("💬 Conversation item created:", jsonData);
+            break;
+
+          case 'response.created':
+            // New response started - clear previous text
+            setAiResponseText("");
+            console.log("🆕 New AI Response Started");
+            break;
+
+          case 'input_audio_buffer.speech_started':
+            console.log("🗣️ User speech detected");
+            break;
+
+          default:
+            console.log("📦 Unknown message type:", messageType, jsonData);
+        }
+      } catch (e) {
+        // Not JSON, log as raw text
+        console.log("💬 AI Agent Text Response (raw):", event.data);
+      }
+    } else {
+      console.log("📦 AI Agent Response (unknown type):", {
+        type: typeof event.data,
+        data: event.data
+      });
+    }
+  };
+
   const handleStartCall = async () => {
     if (connectionStatus === 'connected') return;
-    
+
     try {
       setConnectionStatus('connecting');
       setIsCallActive(true);
       setCallDuration(0);
-      
-      // Check if AG2 client is available
-      if (!window.ag2client) {
-        console.error("AG2 client library not loaded");
+
+      // Check if getUserMedia is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error("getUserMedia not available");
         setConnectionStatus('error');
         setIsCallActive(false);
-        alert("Voice chat library not loaded. Please refresh the page and try again.");
+        alert("Microphone access requires HTTPS or localhost. Please use a secure connection.");
         return;
       }
 
-      console.log('Initializing AG2 Client...');
+      // Request microphone permission first
+      try {
+        console.log('Requesting microphone permission...');
+        const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        testStream.getTracks().forEach(track => track.stop());
+        console.log('✅ Microphone permission granted');
+      } catch (mediaError: any) {
+        console.error("Microphone permission error:", mediaError);
+        setConnectionStatus('error');
+        setIsCallActive(false);
+
+        let errorMsg = '';
+        if (mediaError.name === 'NotFoundError' || mediaError.name === 'DevicesNotFoundError') {
+          errorMsg = "No microphone found.\n\nPlease:\n1. Connect a microphone to your device\n2. Check your system audio settings\n3. Ensure the microphone is enabled\n4. Try refreshing the page";
+        } else if (mediaError.name === 'NotAllowedError' || mediaError.name === 'PermissionDeniedError') {
+          errorMsg = "Microphone permission was denied.\n\nPlease:\n1. Click the microphone icon in your browser's address bar\n2. Allow microphone access\n3. Try again";
+        } else if (mediaError.name === 'NotReadableError' || mediaError.name === 'TrackStartError') {
+          errorMsg = "Microphone is already in use.\n\nPlease:\n1. Close other applications using the microphone\n2. Try again";
+        } else {
+          errorMsg = `Microphone error: ${mediaError.message || mediaError.name}\n\nPlease check your microphone settings and try again.`;
+        }
+
+        alert(errorMsg);
+        return;
+      }
+
+      console.log('Initializing WebSocket connection...');
       console.log(`Connecting to ${WEBSOCKET_URL}...`);
-      
-      // Initialize AG2 WebSocket Audio Client with error handling
-      const client = new window.ag2client.WebsocketAudio(WEBSOCKET_URL);
-      audioClientRef.current = client;
 
-      // Add a timeout for connection
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Connection timeout - Server not responding')), 10000);
-      });
+      // Initialize AudioContext for playback
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+        console.log('🎵 AudioContext initialized, initial state:', audioContextRef.current.state);
+      }
 
-      // Try to start the client with timeout
-      await Promise.race([
-        client.start(),
-        timeoutPromise
-      ]);
-      
-      // Only set connected if we actually connected
+      // Ensure audio context is running (required by some browsers)
+      if (audioContextRef.current.state === 'suspended') {
+        console.log('🎵 Resuming AudioContext...');
+        await audioContextRef.current.resume();
+        console.log('🎵 AudioContext state after resume:', audioContextRef.current.state);
+      }
+
+      // Get microphone stream for sending audio
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
+      // Bypass ngrok warning page by making HTTP request first
+      // This establishes a session that allows WebSocket connections
+      const baseUrl = "https://api.evanstrainer.com";
+      const baseUrlWs = "api.evanstrainer.com";
+
+      // const baseUrl = "https://738002e1e676.ngrok-free.app";
+      // const baseUrlWs = "738002e1e676.ngrok-free.app";
+
+      // First, make an HTTP request to establish ngrok session
+      // This bypasses the warning page for subsequent WebSocket connections
+      try {
+        console.log('🔓 Establishing ngrok session...');
+        const sessionResponse = await fetch(`${baseUrl}/api/v1/websocket`, {
+          method: 'GET',
+          headers: {
+            'ngrok-skip-browser-warning': 'true'
+          }
+        });
+        console.log('✅ ngrok session established, HTTP status:', sessionResponse.status);
+      } catch (sessionError: any) {
+        console.warn('⚠️ Could not establish ngrok session (will still try WebSocket):', sessionError.message);
+      }
+
+      // Try different WebSocket endpoints
+      // Note: We already established ngrok session via /api/v1/websocket HTTP request above
+      // Since HTTP endpoint is /api/v1/websocket, WebSocket is likely at /api/v1/client-stream
+      const possibleEndpoints = [
+        `wss://${baseUrlWs}/api/v1/client-stream`,
+        `ws://${baseUrlWs}/api/v1/client-stream`,
+        `wss://${baseUrlWs}/client-stream`,
+        `ws://${baseUrlWs}/client-stream`,
+      ];
+
+      let connected = false;
+      let lastError: Error | null = null;
+      let ws: WebSocket | null = null;
+
+      // Small delay to ensure ngrok session is established
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      for (const wsEndpoint of possibleEndpoints) {
+        try {
+          console.log(` Attempting WebSocket connection to: ${wsEndpoint}`);
+
+          ws = new WebSocket(wsEndpoint);
+          wsRef.current = ws;
+
+          // Set up WebSocket event handlers
+          ws.addEventListener('open', () => {
+            console.log('✅ WebSocket Connected to:', wsEndpoint);
+
+            // Start sending audio data from microphone
+            const audioContext = new AudioContext({ sampleRate: 16000 });
+            const source = audioContext.createMediaStreamSource(stream);
+            const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+            processor.onaudioprocess = (e) => {
+              if (!isMuted && ws && ws.readyState === WebSocket.OPEN) {
+                const inputData = e.inputBuffer.getChannelData(0);
+                // Convert Float32Array to Int16Array (PCM16)
+                const pcm16 = new Int16Array(inputData.length);
+                for (let i = 0; i < inputData.length; i++) {
+                  const s = Math.max(-1, Math.min(1, inputData[i]));
+                  pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                }
+                // Send raw audio bytes to backend
+                ws.send(pcm16.buffer);
+              }
+            };
+
+            source.connect(processor);
+            processor.connect(audioContext.destination);
+          });
+
+          ws.addEventListener('message', handleWebSocketMessage);
+
+          ws.addEventListener('error', (event: Event) => {
+            console.error('❌ WebSocket Error Event:', event);
+            console.error('WebSocket URL:', wsEndpoint);
+            console.error('WebSocket readyState:', ws?.readyState);
+            setConnectionStatus('error');
+          });
+
+          ws.addEventListener('close', (event: CloseEvent) => {
+            console.log('🔌 WebSocket Closed:', {
+              code: event.code,
+              reason: event.reason || 'No reason provided',
+              wasClean: event.wasClean,
+              endpoint: wsEndpoint
+            });
+
+            // Code 1006 means abnormal closure - provide helpful diagnostics
+            if (event.code === 1006) {
+              console.error('❌ WebSocket closed abnormally (code 1006). Possible causes:');
+              console.error('1. Server is not running');
+              console.error('2. ngrok tunnel is not active or expired');
+              console.error('3. Wrong endpoint path');
+              console.error('4. CORS/authentication issue');
+              console.error('5. Network/firewall blocking the connection');
+            }
+
+            // Only update status if this was the active connection
+            if (ws === wsRef.current) {
+              setConnectionStatus('disconnected');
+              setIsCallActive(false);
+
+              // Cleanup
+              if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                mediaStreamRef.current = null;
+              }
+              if (audioContextRef.current) {
+                audioContextRef.current.close();
+                audioContextRef.current = null;
+              }
+            }
+          });
+
+          // Wait for connection to open with timeout
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              if (ws) {
+                ws.close();
+              }
+              reject(new Error(`Connection timeout to ${wsEndpoint}`));
+            }, 10000); // Increased timeout to 10 seconds
+
+            ws.addEventListener('open', () => {
+              clearTimeout(timeout);
+              connected = true;
+              resolve(undefined);
+            });
+
+            ws.addEventListener('error', (error) => {
+              clearTimeout(timeout);
+              reject(new Error(`WebSocket error: ${error}`));
+            });
+
+            ws.addEventListener('close', (event) => {
+              if (!connected) {
+                clearTimeout(timeout);
+                reject(new Error(`WebSocket closed before connection: code ${event.code}`));
+              }
+            });
+          });
+
+          // If we get here, connection was successful
+          console.log(`✅ Successfully connected to ${wsEndpoint}`);
+          break;
+
+        } catch (err: any) {
+          console.warn(`❌ Failed to connect to ${wsEndpoint}:`, err.message);
+          lastError = err;
+
+          // Close the failed WebSocket
+          if (ws) {
+            try {
+              ws.close();
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+          }
+          ws = null;
+
+          // Continue to next endpoint
+          continue;
+        }
+      }
+
+      if (!connected || !ws) {
+        throw lastError || new Error('Failed to connect to any WebSocket endpoint. Please ensure the Python backend server is running and the ngrok tunnel is active.');
+      }
+
+      // Set as connected
       setConnectionStatus('connected');
+      setAiResponseText(""); // Clear previous responses
       console.log('✅ Connected & Live! Speak now.');
     } catch (error) {
       console.error("Error starting call:", error);
       setConnectionStatus('error');
       setIsCallActive(false);
-      
-      // Clean up the client reference
+
+      // Clean up WebSocket and media stream
+      if (wsRef.current) {
+        try {
+          wsRef.current.close();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        wsRef.current = null;
+      }
+
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
+
+      if (audioContextRef.current) {
+        try {
+          audioContextRef.current.close();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        audioContextRef.current = null;
+      }
+
+      // Clean up AG2 client if used
       if (audioClientRef.current) {
         try {
           audioClientRef.current.stop();
@@ -136,28 +580,96 @@ export default function DemoCall() {
         }
         audioClientRef.current = null;
       }
-      
+
       const errorMessage = (error as Error).message || 'Unknown error';
-      
+
       // Provide helpful error messages
-      if (errorMessage.includes('timeout') || errorMessage.includes('failed')) {
-        alert(`Failed to connect to voice server at ${WEBSOCKET_URL}.\n\nPlease ensure:\n1. The AG2 server is running\n2. The server address is correct\n3. Port 5050 is accessible`);
+      if (errorMessage.includes('code 1006') || errorMessage.includes('1006')) {
+        alert(
+          `WebSocket connection failed (Code 1006 - Abnormal Closure)\n\n` +
+          `This usually means the connection was refused or closed immediately.\n\n` +
+          `Please check:\n` +
+          `1. ✅ Is your Python backend server running?\n` +
+          `2. ✅ Is the ngrok tunnel active? (Check: https://738002e1e676.ngrok-free.app/websocket)\n` +
+          `3. ✅ Is the WebSocket endpoint correct? (/client-stream)\n` +
+          `4. ✅ Check browser console for more details\n\n` +
+          `Tried endpoints:\n` +
+          `- wss://738002e1e676.ngrok-free.app/client-stream\n` +
+          `- ws://738002e1e676.ngrok-free.app/client-stream\n` +
+          `- wss://738002e1e676.ngrok-free.app/api/v1/client_stream\n` +
+          `- ws://738002e1e676.ngrok-free.app/api/v1/client_stream\n\n` +
+          `Quick test: Open https://738002e1e676.ngrok-free.app/websocket in your browser to verify the server is reachable.`
+        );
+      } else if (errorMessage.includes('WebSocket') || errorMessage.includes('connection failed')) {
+        alert(
+          `WebSocket connection failed\n\n` +
+          `Possible issues:\n` +
+          `1. The Python backend server is not running\n` +
+          `2. The ngrok tunnel is not active or expired\n` +
+          `3. The WebSocket endpoint path might be incorrect\n` +
+          `4. The server doesn't support WebSocket connections\n\n` +
+          `Error: ${errorMessage}\n\n` +
+          `Try checking:\n` +
+          `- Is the server running?\n` +
+          `- Is the ngrok tunnel active?\n` +
+          `- Does the endpoint exist on the server?\n` +
+          `- Check browser console for detailed error messages`
+        );
+      } else if (errorMessage.includes('timeout')) {
+        alert(
+          `Connection timeout\n\n` +
+          `The server is not responding. Please ensure:\n` +
+          `1. The Python backend server is running\n` +
+          `2. The server address is correct\n` +
+          `3. The ngrok tunnel is active\n` +
+          `4. Firewall allows the connection\n\n` +
+          `Error: ${errorMessage}`
+        );
       } else {
-        alert(`Failed to start call: ${errorMessage}`);
+        alert(`Failed to start call: ${errorMessage}\n\nCheck the browser console for more details.`);
       }
     }
   };
 
   const handleEndCall = () => {
     if (connectionStatus === 'disconnected') return;
-    
+
     try {
+      console.log('Ending call...');
+
+      // Close WebSocket
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
+      // Stop media stream
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
+
+      // Close audio context
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+
+      // Stop AG2 client if used
       if (audioClientRef.current) {
-        console.log('Stopping AG2 Client...');
-        audioClientRef.current.stop();
+        try {
+          audioClientRef.current.stop();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
         audioClientRef.current = null;
       }
-      
+
+      // Clear audio queue and reset timing
+      audioQueueRef.current = [];
+      nextAudioStartTimeRef.current = 0;
+      setAiResponseText("");
+
       setIsCallActive(false);
       setCallDuration(0);
       setConnectionStatus('disconnected');
@@ -294,8 +806,8 @@ export default function DemoCall() {
                     connectionStatus === "connected"
                       ? "border-green-500/30 bg-green-500/5"
                       : connectionStatus === "connecting"
-                      ? "border-yellow-500/30 bg-yellow-500/5"
-                      : "border-red-500/30 bg-red-500/5"
+                        ? "border-yellow-500/30 bg-yellow-500/5"
+                        : "border-red-500/30 bg-red-500/5"
                   )}
                 >
                   <div className="flex items-center justify-center gap-2 mb-2">
@@ -305,8 +817,8 @@ export default function DemoCall() {
                         connectionStatus === "connected"
                           ? "bg-green-500"
                           : connectionStatus === "connecting"
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
+                            ? "bg-yellow-500"
+                            : "bg-red-500"
                       )}
                     />
                     <span
@@ -315,25 +827,33 @@ export default function DemoCall() {
                         connectionStatus === "connected"
                           ? "text-green-600 dark:text-green-400"
                           : connectionStatus === "connecting"
-                          ? "text-yellow-600 dark:text-yellow-400"
-                          : "text-red-600 dark:text-red-400"
+                            ? "text-yellow-600 dark:text-yellow-400"
+                            : "text-red-600 dark:text-red-400"
                       )}
                     >
                       {connectionStatus === "connected"
                         ? "Call in progress"
                         : connectionStatus === "connecting"
-                        ? "Connecting..."
-                        : "Connection error"}
+                          ? "Connecting..."
+                          : "Connection error"}
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {connectionStatus === "connected"
                       ? "You're connected to the AI training assistant"
                       : connectionStatus === "connecting"
-                      ? "Establishing connection..."
-                      : "Failed to connect. Please try again."}
+                        ? "Establishing connection..."
+                        : "Failed to connect. Please try again."}
                   </p>
                 </div>
+
+                {/* AI Response Text Display */}
+                {connectionStatus === "connected" && aiResponseText && (
+                  <div className="rounded-xl border border-border/60 bg-background/80 p-4 backdrop-blur text-left max-h-32 overflow-y-auto">
+                    <p className="text-xs font-medium mb-2 text-muted-foreground">AI Response:</p>
+                    <p className="text-sm text-foreground">{aiResponseText}</p>
+                  </div>
+                )}
               </div>
             )}
 

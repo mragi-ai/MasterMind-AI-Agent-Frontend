@@ -9,17 +9,21 @@ export default function DemoChat() {
   const navigate = useNavigate();
   const selectedRole = useAppStore((state) => state.selectedRole);
 
+  const chatPlaceholder = selectedRole
+    ? `Hi! I'm ready to help you practice as a ${selectedRole.title}. What would you like to work on today?`
+    : "Hi! I'm your AI training assistant. How can I help you today?";
+
   // Automatically open the chat widget when component mounts and set initial prompt
   useEffect(() => {
     // Small delay to ensure the widget is mounted and ready
     const timer = setTimeout(() => {
       window.dispatchEvent(
         new CustomEvent("open-ai-trainer", {
-          detail: {
-            prompt: selectedRole
-              ? `Hi! I'm ready to help you practice as a ${selectedRole.title}. What would you like to work on today?`
-              : "Hi! I'm your AI training assistant. How can I help you today?",
-          },
+          // detail: {
+          //   prompt: selectedRole
+          //     ? `Hi! I'm ready to help you practice as a ${selectedRole.title}. What would you like to work on today?`
+          //     : "Hi! I'm your AI training assistant. How can I help you today?",
+          // },
         })
       );
     }, 500);
@@ -142,6 +146,7 @@ export default function DemoChat() {
       <AITrainerWidget
         brandName="AI Trainer"
         phoneNumber="+14073070855"
+        placeholder={chatPlaceholder}
         onEscalate={() => {
           console.log("Escalation requested");
         }}
