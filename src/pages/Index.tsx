@@ -2,6 +2,7 @@ import AITrainerWidget from "@/components/AITrainerWidget";
 import HeroAITrainer from "@/components/HeroAITrainer";
 import FeatureGridPro from "@/components/FeatureGridPro";
 import TopicsShowcase from "@/components/TopicsShowcase";
+import PopularVideosSection from "@/components/PopularVideosSection";
 import CommandPalette from "@/components/CommandPalette";
 import { Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -127,6 +128,9 @@ const Index = () => {
 
       {/* Features Section */}
       <FeatureGridPro />
+
+      {/* Popular Videos Section - Module-based like Coursera */}
+      <PopularVideosSection />
 
       {/* Topics Section */}
       <TopicsShowcase />

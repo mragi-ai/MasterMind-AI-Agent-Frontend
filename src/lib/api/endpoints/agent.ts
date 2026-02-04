@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/request";
-import { chatApiClient } from "@/lib/api/client";
+import { chatApiClient, demoApiClient } from "@/lib/api/client";
 
 function ensureOnline(): void {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -89,13 +89,42 @@ export async function getAssessment(body: AssessmentRequest): Promise<Assessment
 }
 
 export type DemoAskRequest = {
-  user_id: string;
-  agent_id: string;
   question: string;
+  agent_id: string;
+  role: string;
+  session_id: string;
 };
 
+async function handleDemoChat<T>(promise: Promise<{ data: T }>): Promise<T> {
+  try {
+    const res = await promise;
+    const data = res.data;
+
+    // Check if response is HTML (ngrok warning page)
+    if (typeof data === 'string' && (data.includes('<!DOCTYPE html>') || data.includes('ngrok'))) {
+      throw new Error("Received HTML response (ngrok warning page). Please visit the API URL in your browser first to bypass the warning.");
+    }
+
+    return data;
+  } catch (err) {
+    // Check if error response contains HTML
+    if (
+      err &&
+      typeof err === "object" &&
+      "response" in err &&
+      (err as any).response?.data &&
+      typeof (err as any).response.data === "string" &&
+      ((err as any).response.data.includes("<!DOCTYPE html>") || (err as any).response.data.includes("ngrok"))
+    ) {
+      throw new Error("Ngrok warning page detected. The API endpoint may require browser verification.");
+    }
+    throw new Error(toErrorMessage(err));
+  }
+}
+
 export async function demoAsk(body: DemoAskRequest): Promise<ChatAskResponse> {
-  return api.post<ChatAskResponse, DemoAskRequest>("demo/ask", body);
+  ensureOnline();
+  return handleDemoChat<ChatAskResponse>(demoApiClient.post<ChatAskResponse>("demo/ask", body));
 }
 
 export type Agent = {
@@ -103,13 +132,16 @@ export type Agent = {
   id: string;
   agent_id?: string;
   name: string;
-  instruction: string;
+  role?: string;
+  instruction?: string;
   [key: string]: any;
 };
 
 export type AgentsListResponse = {
-  status: string;
-  data: Agent[];
+  status?: string;
+  agents?: Agent[];
+  data?: Agent[];
+  total?: number;
   [key: string]: any;
 };
 

@@ -33,6 +33,51 @@ export type VideoTranscriptSearchResponse = {
   matches: TranscriptSearchResult[];
 };
 
+// Video timestamp type (defined early for use in ModuleVideo)
+export type VideoTimestamp = {
+  time: string;
+  label: string;
+};
+
+// Module info type (defined early for use in ModuleVideo)
+export type VideoModuleInfo = {
+  module_number: string;
+  module_name: string;
+  course_name: string;
+};
+
+// Extended video type for module-based videos
+export type ModuleVideo = {
+  id: string;
+  _id?: string; // API may return _id instead of id
+  title: string;
+  description?: string;
+  youtube_url: string;
+  thumbnail_url?: string;
+  duration?: string;
+  tags?: string[];
+  target_role?: string[];
+  timestamps?: VideoTimestamp[];
+  module_info: VideoModuleInfo;
+  model_id: string;
+  status?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ModuleVideosResponse = {
+  count: number;
+  videos: ModuleVideo[];
+};
+
+// Module structure for grouping videos
+export type VideoModule = {
+  module_number: string;
+  module_name: string;
+  course_name: string;
+  videos: ModuleVideo[];
+};
+
 export async function searchVideos(query: string): Promise<VideoSearchResponse> {
   return api.get<VideoSearchResponse>("videos/search", {
     params: { q: query },
@@ -50,6 +95,11 @@ export async function searchTranscript(
 
 export async function getVideoDetails(videoId: string): Promise<VideoSearchResult> {
   return api.get<VideoSearchResult>(`videos/${videoId}`);
+}
+
+// Fetch videos by module ID
+export async function getVideosByModule(moduleId: string): Promise<ModuleVideosResponse> {
+  return api.get<ModuleVideosResponse>(`videos/${moduleId}`);
 }
 
 // Video progress types
@@ -71,17 +121,6 @@ export type VideoProgressSaveResponse = {
 };
 
 // All videos response type
-export type VideoTimestamp = {
-  time: string;
-  label: string;
-};
-
-export type VideoModuleInfo = {
-  module_number: string;
-  module_name: string;
-  course_name: string;
-};
-
 export type AllVideosResponse = {
   count: number;
   videos: Array<{
@@ -106,7 +145,7 @@ export type AllVideosResponse = {
 export async function getAllVideos(): Promise<AllVideosResponse> {
   // First, try using the same apiClient as other endpoints
   // Try different possible endpoint paths
-  const possibleEndpoints = ["videos/all", "video/all", "videos"];
+  const possibleEndpoints = ["videos/all", "videos/all", "videos"];
   
   for (const endpoint of possibleEndpoints) {
     try {

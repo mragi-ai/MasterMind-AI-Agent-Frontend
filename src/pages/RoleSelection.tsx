@@ -22,6 +22,7 @@ import useAppStore from "@/zustand";
 import { UserMenu } from "@/components/UserMenu";
 import { clearAuth } from "@/lib/auth";
 import { logout } from "@/lib/api/endpoints/auth";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 type Role = {
   id: string;
@@ -34,31 +35,31 @@ type Role = {
 
 const roles: Role[] = [
   {
-    id: "695b8cc6566a1ea150da303c",
-    title: "Carrier Representative",
+    id: "69688c3ee8da0d0676fbbbab",
+    title: "Customer Record Operations Trainer",
     description:
-      "Coordinate with carriers, oversee loads, and keep freight moving on schedule.",
-    icon: Truck,
-    color: "primary",
-    role: "carrier_representative",
-  },
-  {
-    id: "695b8c9d566a1ea150da303b",
-    title: "Customer Representative",
-    description:
-      "Support shippers and receivers, deliver proactive updates, and resolve issues fast.",
+      "Master customer record management with guided training. Learn to handle customer data, update records, and maintain accuracy.",
     icon: Headset,
-    color: "accent",
-    role: "customer_representative",
+    color: "primary",
+    role: "Customer Record Operations Trainer",
   },
   {
-    id: "695b8d76566a1ea150da303d",
-    title: "Agent Manager",
+    id: "69688d7b1c1c18b204da41ff",
+    title: "Carrier Record Operations Trainer",
     description:
-      "Orchestrate agent performance, monitor KPIs, and deliver operational insights.",
-    icon: ShieldCheck,
+      "Train on carrier record operations and management. Learn best practices for maintaining carrier information.",
+    icon: Truck,
     color: "accent",
-    role: "agent_manager",
+    role: "Carrier Record Operations Trainer",
+  },
+  {
+    id: "69688ea85d69d724d817beab",
+    title: "Facility Record Operations Trainer",
+    description:
+      "Develop expertise in facility record management. Learn to maintain facility data and ensure data integrity.",
+    icon: ShieldCheck,
+    color: "primary",
+    role: "Facility Record Operations Trainer",
   },
 ];
 
@@ -94,9 +95,10 @@ export default function RoleSelection() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_rgba(10,10,10,0))]">
-      {/* Ambient background */}
+    <div className="relative min-h-screen overflow-hidden bg-background transition-colors duration-300">
+      {/* Ambient background - theme aware */}
       <div className="absolute inset-0 pointer-events-none opacity-30">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_hsl(var(--primary)/0.15),_transparent_60%)]" />
         <div
           className="absolute top-[-10%] left-[5%] h-[28rem] w-[28rem] rounded-full bg-primary/15 blur-3xl animate-float"
           style={{ animationDuration: "8s" }}
@@ -110,7 +112,10 @@ export default function RoleSelection() {
       <div className="relative container mx-auto max-w-7xl px-6 py-16">
         {/* Top Navigation */}
         <div className="flex justify-end mb-6">
-          <UserMenu onLogout={handleLogout} />
+          <div className="flex items-center gap-3">
+            <ThemeToggle variant="outline" size="sm" className="bg-card/80 border-border shadow-sm" />
+            <UserMenu onLogout={handleLogout} />
+          </div>
         </div>
 
         <div className="grid items-start gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">

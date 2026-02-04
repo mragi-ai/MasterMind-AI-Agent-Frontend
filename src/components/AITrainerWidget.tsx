@@ -3,9 +3,19 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Mic, Phone, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { chatAsk, demoAsk, getAssessment } from "@/lib/api/endpoints/agent";
+import { chatAsk, demoAsk } from "@/lib/api/endpoints/agent";
 import useAppStore from "@/zustand";
 import { getUser } from "@/lib/auth";
+import AnswerCard, {
+  parseResponseToSections,
+  parseAndValidateResponse,
+  type AnswerCardSection,
+} from "./AnswerCard";
+import TrainingResponseCard, {
+  isTrainingResponseHtml,
+} from "./TrainingResponseCard";
+import { validateAIResponse, GUARDRAIL_MESSAGES } from "@/lib/guardrails";
+import { ThemeToggle } from "./ThemeToggle";
 
 type Role = "user" | "assistant" | "system";
 type ContentKind = "text" | "video" | "options" | "rich";
@@ -42,12 +52,20 @@ type Message = {
   parts?: MessagePart[];
   source?: string;
   ts?: string;
+  // Structured answer card sections for user-friendly display
+  cardSections?: AnswerCardSection[];
+  // Flag to use card format for this message
+  useCardFormat?: boolean;
+  // HTML training response card
+  trainingResponseHtml?: string;
+  // Flag to use training response HTML format
+  useTrainingResponseFormat?: boolean;
 };
 
 // Generate robust unique IDs across environments (fallback if crypto.randomUUID is unavailable)
 const generateId = (): string =>
   typeof crypto !== "undefined" &&
-    typeof (crypto as any).randomUUID === "function"
+  typeof (crypto as any).randomUUID === "function"
     ? (crypto as any).randomUUID()
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -77,15 +95,86 @@ const isPlayableVideoUrl = (url: string): boolean => {
   return /\.(mp4|webm|ogg|mov)$/i.test(url);
 };
 
+// Helper function to extract YouTube video ID from URL
+const extractYouTubeVideoId = (url: string): string | null => {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  return null;
+};
+
+// Helper function to extract YouTube URLs from markdown links and plain text
+const extractYouTubeFromText = (
+  text: string,
+): { url: string; title: string; videoId: string }[] => {
+  const results: { url: string; title: string; videoId: string }[] = [];
+
+  // Pattern 1: Markdown links [text](youtube-url)
+  const markdownPattern =
+    /\[([^\]]+)\]\((https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})[^\s)]*)\)/gi;
+  let match;
+  while ((match = markdownPattern.exec(text)) !== null) {
+    results.push({
+      title: match[1],
+      url: match[2],
+      videoId: match[3],
+    });
+  }
+
+  // Pattern 2: Plain YouTube URLs (not already in markdown)
+  const plainUrlPattern =
+    /(?<!\]\()(?<!\()https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[^\s]*)?/gi;
+  while ((match = plainUrlPattern.exec(text)) !== null) {
+    // Check if this URL is not already captured from markdown
+    const videoId = match[1];
+    if (!results.some((r) => r.videoId === videoId)) {
+      results.push({
+        title: "Video",
+        url: match[0],
+        videoId: videoId,
+      });
+    }
+  }
+
+  return results;
+};
+
+// Helper function to remove YouTube links from text for cleaner display
+const removeYouTubeLinksFromText = (text: string): string => {
+  // Remove markdown YouTube links
+  let cleaned = text.replace(
+    /\[([^\]]+)\]\(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[a-zA-Z0-9_-]{11}[^\s)]*\)/gi,
+    "",
+  );
+  // Remove plain YouTube URLs
+  cleaned = cleaned.replace(
+    /https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[a-zA-Z0-9_-]{11}[^\s]*/gi,
+    "",
+  );
+  // Clean up extra whitespace and line breaks
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
+  return cleaned;
+};
+
 // Helper function to map role to API format
-const mapRoleToApiFormat = (role: string | undefined, title: string | undefined): string => {
+const mapRoleToApiFormat = (
+  role: string | undefined,
+  title: string | undefined,
+): string => {
   if (!role && !title) return "customer record";
 
   // Map role values to API format if needed
   const roleMap: Record<string, string> = {
-    "customer_representative": "customer record",
-    "carrier_representative": "carrier record",
-    "agent_manager": "agent manager",
+    customer_representative: "customer record",
+    carrier_representative: "carrier record",
+    agent_manager: "agent manager",
   };
 
   if (role && roleMap[role]) {
@@ -105,6 +194,7 @@ type Props = {
   logoUrl?: string;
   phoneNumber?: string;
   onEscalate?: () => void;
+  onClose?: () => void;
   startOpen?: boolean;
   supportEmail?: string;
 };
@@ -115,6 +205,7 @@ export default function AITrainerWidget({
   logoUrl,
   phoneNumber,
   onEscalate,
+  onClose,
   startOpen = false,
   supportEmail = "training-support@mastermind.ai",
   placeholder,
@@ -165,7 +256,10 @@ export default function AITrainerWidget({
   const [ariaLive, setAriaLive] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
 
-  const formatMsgText = (text: string | undefined, startCounter: number = 0) => {
+  const formatMsgText = (
+    text: string | undefined,
+    startCounter: number = 0,
+  ) => {
     if (!text) return { html: "", counter: startCounter };
 
     let counter = startCounter;
@@ -185,7 +279,10 @@ export default function AITrainerWidget({
       let lines = text.split("\n");
       lines = lines.map((line) => {
         const trimmed = line.trim();
-        if ((trimmed.startsWith("**") || trimmed.startsWith("__")) && !/^\d+\./.test(trimmed)) {
+        if (
+          (trimmed.startsWith("**") || trimmed.startsWith("__")) &&
+          !/^\d+\./.test(trimmed)
+        ) {
           counter++;
           return `${counter}. ${line}`;
         }
@@ -221,7 +318,10 @@ export default function AITrainerWidget({
           <div className="rounded-lg overflow-hidden border border-border bg-card">
             {video.src ? (
               // Embedded YouTube video
-              <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+              <div
+                className="relative w-full"
+                style={{ paddingBottom: "56.25%" }}
+              >
                 <iframe
                   src={`${video.src}?rel=0&modestbranding=1`}
                   className="absolute top-0 left-0 w-full h-full"
@@ -278,12 +378,7 @@ export default function AITrainerWidget({
                   {video.description}
                 </p>
               )}
-              <Button
-                size="sm"
-                variant="outline"
-                asChild
-                className="w-full"
-              >
+              <Button size="sm" variant="outline" asChild className="w-full">
                 <a
                   href={video.youtube_url}
                   target="_blank"
@@ -318,17 +413,8 @@ export default function AITrainerWidget({
               </div>
             )}
             <div className="flex gap-2 p-2 bg-card border-t border-border">
-              <Button
-                size="sm"
-                variant="outline"
-                asChild
-                className="flex-1"
-              >
-                <a
-                  href={video.src}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+              <Button size="sm" variant="outline" asChild className="flex-1">
+                <a href={video.src} target="_blank" rel="noreferrer">
                   Open in new tab
                 </a>
               </Button>
@@ -343,7 +429,9 @@ export default function AITrainerWidget({
               </div>
               <div className="flex-1">
                 <h4 className="font-semibold text-sm">{video.title}</h4>
-                <p className="text-xs text-muted-foreground line-clamp-1">External Resource</p>
+                <p className="text-xs text-muted-foreground line-clamp-1">
+                  External Resource
+                </p>
               </div>
             </div>
             {video.description && (
@@ -351,12 +439,7 @@ export default function AITrainerWidget({
                 {video.description}
               </p>
             )}
-            <Button
-              size="sm"
-              variant="outline"
-              asChild
-              className="w-full"
-            >
+            <Button size="sm" variant="outline" asChild className="w-full">
               <a
                 href={video.youtube_url || video.src}
                 target="_blank"
@@ -490,6 +573,47 @@ export default function AITrainerWidget({
     }
   }, [open]);
 
+  // Track previous role to detect changes
+  const prevRoleRef = useRef(selectedRole?.id);
+
+  // Clear chat history and reset session when Training Persona changes
+  useEffect(() => {
+    // Only reset if the role actually changed (not on initial mount)
+    if (prevRoleRef.current && selectedRole?.id && prevRoleRef.current !== selectedRole.id) {
+      console.log("Training Persona changed, clearing chat history");
+      // Reset messages to initial welcome state
+      setMessages([
+        {
+          id: "welcome",
+          role: "assistant",
+          kind: "text",
+          text: "Hi! I'm your AI training assistant. I can help you with step-by-step guidance, answer questions, or connect you with a specialist.",
+          ts: new Date().toLocaleTimeString(),
+        },
+        {
+          id: "quick-start",
+          role: "assistant",
+          kind: "options",
+          text: "What would you like help with?",
+          options: [
+            { label: "📹 Watch a tutorial", value: "tutorial" },
+            { label: "❓ Ask a question", value: "question" },
+            { label: "📞 Talk to someone", value: "escalate" },
+          ],
+          ts: new Date().toLocaleTimeString(),
+        },
+      ]);
+      // Reset session ID to start a fresh conversation
+      setSessionId(null);
+      // Clear any pending states
+      setSending(false);
+      setTyping(false);
+      setInput("");
+    }
+    // Update the previous role ref
+    prevRoleRef.current = selectedRole?.id;
+  }, [selectedRole?.id]);
+
   const pushMessage = (m: Message) => setMessages((prev) => [...prev, m]);
 
   const sendText = async (text?: string) => {
@@ -512,76 +636,167 @@ export default function AITrainerWidget({
     setTyping(true);
 
     try {
-      const payload = {
-        user_id: currentUser?.user_id || "",
-        agent_id: selectedRole?.id || "",
-        question: messageText,
-      };
+      let res;
 
-      const res =
-        location.pathname === "/demo-chat"
-          ? await demoAsk(payload)
-          : await chatAsk({ ...payload, session_id: sessionId || "" });
+      if (location.pathname === "/demo-chat") {
+        // Demo mode payload - use selected role's id as agent_id
+        const demoPayload = {
+          question: messageText,
+          agent_id: selectedRole?.id || "",
+          role: selectedRole?.role || selectedRole?.title || "",
+          session_id: sessionId || `demo-session-${Date.now()}`,
+        };
+        res = await demoAsk(demoPayload);
+      } else {
+        // Regular chat mode
+        const chatPayload = {
+          user_id: currentUser?.user_id || "",
+          agent_id: selectedRole?.id || "",
+          question: messageText,
+          session_id: sessionId || "",
+        };
+        res = await chatAsk(chatPayload);
+      }
 
       // Extract session_id from response if present
       if (res.session_id) {
         if (!sessionId) {
-          console.log("Session ID received from first response:", res.session_id);
+          console.log(
+            "Session ID received from first response:",
+            res.session_id,
+          );
         }
         setSessionId(res.session_id);
       }
 
       const mapped: Message[] = [];
       let finalAnswer = res.answer || "";
-      const richParts: MessagePart[] = [];
 
-      // Process answer into rich parts (text and video)
-      if (finalAnswer) {
-        // Split by <video> tags
-        const parts = finalAnswer.split(/(<video\s+[^>]*>.*?<\/video>)/gi);
-
-        parts.forEach(part => {
-          if (part.toLowerCase().startsWith("<video")) {
-            // Extract video info
-            const srcMatch = part.match(/src=['"]([^'"]+)['"]/i);
-            const titleMatch = part.match(/title=['"]([^'"]+)['"]/i);
-            const src = srcMatch ? srcMatch[1] : "";
-            const title = titleMatch ? titleMatch[1] : "Video Tutorial";
-
-            const youtubeUrl = src;
-            const isYoutube = isYouTubeUrl(youtubeUrl);
-            const embedUrl = isYoutube ? getYouTubeEmbedUrl(youtubeUrl) : null;
-
-            richParts.push({
-              kind: "video",
-              video: {
-                src: embedUrl || (isYoutube ? "" : src),
-                title: title,
-                youtube_url: youtubeUrl,
-                isYoutube: isYoutube,
-              },
-            });
-          } else {
-            const trimmed = part.trim();
-            if (trimmed) {
-              richParts.push({
-                kind: "text",
-                text: part,
-              });
-            }
-          }
-        });
-      }
-
-      // Add the rich message if parts exist
-      if (richParts.length > 0) {
+      // Check if response contains pre-formatted training response HTML
+      if (finalAnswer && isTrainingResponseHtml(finalAnswer)) {
+        // Use the training response HTML directly
         mapped.push({
           id: generateId(),
           role: "assistant",
           kind: "rich",
-          parts: richParts,
           ts: new Date().toLocaleTimeString(),
+          trainingResponseHtml: finalAnswer,
+          useTrainingResponseFormat: true,
         });
+      } else {
+        // Process answer into rich parts (text and video)
+        const richParts: MessagePart[] = [];
+
+        if (finalAnswer) {
+          // First, check for YouTube URLs in markdown links or plain text
+          const youtubeVideos = extractYouTubeFromText(finalAnswer);
+
+          // If we found YouTube videos in the text, extract them and clean the text
+          if (youtubeVideos.length > 0) {
+            // Clean the text by removing YouTube links
+            const cleanedText = removeYouTubeLinksFromText(finalAnswer);
+
+            // Add the cleaned text as a text part
+            if (cleanedText.trim()) {
+              richParts.push({
+                kind: "text",
+                text: cleanedText,
+              });
+            }
+
+            // Add each YouTube video as a video part
+            youtubeVideos.forEach((video) => {
+              const embedUrl = `https://www.youtube.com/embed/${video.videoId}`;
+              richParts.push({
+                kind: "video",
+                video: {
+                  src: embedUrl,
+                  title:
+                    video.title !== "Video" ? video.title : "Video Tutorial",
+                  youtube_url: video.url,
+                  isYoutube: true,
+                },
+              });
+            });
+          } else {
+            // No YouTube URLs found, check for <video> tags (legacy handling)
+            const parts = finalAnswer.split(/(<video\s+[^>]*>.*?<\/video>)/gi);
+
+            parts.forEach((part) => {
+              if (part.toLowerCase().startsWith("<video")) {
+                // Extract video info
+                const srcMatch = part.match(/src=['"]([^'"]+)['"]/i);
+                const titleMatch = part.match(/title=['"]([^'"]+)['"]/i);
+                const src = srcMatch ? srcMatch[1] : "";
+                const title = titleMatch ? titleMatch[1] : "Video Tutorial";
+
+                const youtubeUrl = src;
+                const isYoutube = isYouTubeUrl(youtubeUrl);
+                const embedUrl = isYoutube
+                  ? getYouTubeEmbedUrl(youtubeUrl)
+                  : null;
+
+                richParts.push({
+                  kind: "video",
+                  video: {
+                    src: embedUrl || (isYoutube ? "" : src),
+                    title: title,
+                    youtube_url: youtubeUrl,
+                    isYoutube: isYoutube,
+                  },
+                });
+              } else {
+                const trimmed = part.trim();
+                if (trimmed) {
+                  richParts.push({
+                    kind: "text",
+                    text: part,
+                  });
+                }
+              }
+            });
+          }
+        }
+
+        // Add the rich message if parts exist
+        if (richParts.length > 0) {
+          // Extract video info for card sections if present
+          const videoInfo = richParts.find((p) => p.kind === "video")?.video;
+          const textContent = richParts
+            .filter((p) => p.kind === "text")
+            .map((p) => p.text)
+            .join("\n\n");
+
+          // Parse and validate response with guardrails
+          // This prevents hallucination of menu names, buttons, and videos
+          // Returns "no matching video found" when no approved video exists
+          const validatedResponse = parseAndValidateResponse(
+            textContent,
+            videoInfo?.youtube_url || videoInfo?.src,
+            videoInfo?.title,
+            videoInfo?.duration,
+            messageText, // Use user's question as topic for video matching
+          );
+
+          // Log any guardrail warnings for debugging
+          if (validatedResponse.warnings.length > 0) {
+            console.warn("Guardrail warnings:", validatedResponse.warnings);
+          }
+
+          mapped.push({
+            id: generateId(),
+            role: "assistant",
+            kind: "rich",
+            parts: richParts,
+            ts: new Date().toLocaleTimeString(),
+            // Add validated card sections with guardrails applied
+            cardSections:
+              validatedResponse.sections.length > 1
+                ? validatedResponse.sections
+                : undefined,
+            useCardFormat: validatedResponse.sections.length > 1,
+          });
+        }
       }
 
       // Process other messages if present
@@ -598,7 +813,14 @@ export default function AITrainerWidget({
       }
 
       // Process explicit videos if present (not embedded in answer)
-      if (res.videos && Array.isArray(res.videos) && res.videos.length > 0 && richParts.length === 0) {
+      // Skip if we already have a training response format or rich content
+      const hasRichContent = mapped.some((m) => m.kind === "rich");
+      if (
+        res.videos &&
+        Array.isArray(res.videos) &&
+        res.videos.length > 0 &&
+        !hasRichContent
+      ) {
         res.videos.forEach((video: any) => {
           const youtubeUrl = video.youtube_url || video.url || "";
           const isYoutube = isYouTubeUrl(youtubeUrl);
@@ -609,7 +831,7 @@ export default function AITrainerWidget({
             role: "assistant",
             kind: "video",
             video: {
-              src: embedUrl || (isYoutube ? "" : (youtubeUrl || video.src || "")),
+              src: embedUrl || (isYoutube ? "" : youtubeUrl || video.src || ""),
               title: video.title || "Video",
               description: video.description,
               youtube_url: youtubeUrl,
@@ -637,7 +859,7 @@ export default function AITrainerWidget({
         mapped
           .map((m) => m.text)
           .filter(Boolean)
-          .join(" ")
+          .join(" "),
       );
     } catch (e: any) {
       const msg = e?.message || "Failed to send message";
@@ -660,90 +882,8 @@ export default function AITrainerWidget({
         onEscalate();
       }
       pushContactDetails();
-    } else if (value === "question") {
-      // Call assessment API when "Ask a question" is clicked
-      const currentUser = getUser<{ user_id: string }>();
-      if (!currentUser?.user_id) {
-        pushMessage({
-          id: generateId(),
-          role: "system",
-          kind: "text",
-          text: "Please log in to ask a question.",
-          ts: new Date().toLocaleTimeString(),
-        });
-        return;
-      }
-
-      if (!sessionId) {
-        pushMessage({
-          id: generateId(),
-          role: "system",
-          kind: "text",
-          text: "Please start a conversation first to get a session ID.",
-          ts: new Date().toLocaleTimeString(),
-        });
-        return;
-      }
-
-
-
-      setTyping(true);
-      try {
-        const res = await getAssessment({
-          user_id: currentUser.user_id,
-          session_id: sessionId,
-          agent_id: selectedRole?.id || "",
-        });
-
-        // Display the assessment/question response
-        if (res.question) {
-          pushMessage({
-            id: generateId(),
-            role: "assistant",
-            kind: "text",
-            text: res.question,
-            ts: new Date().toLocaleTimeString(),
-          });
-        } else if (res.questions && Array.isArray(res.questions) && res.questions.length > 0) {
-          res.questions.forEach((q: string) => {
-            pushMessage({
-              id: generateId(),
-              role: "assistant",
-              kind: "text",
-              text: q,
-              ts: new Date().toLocaleTimeString(),
-            });
-          });
-        } else if (res.message) {
-          pushMessage({
-            id: generateId(),
-            role: "assistant",
-            kind: "text",
-            text: res.message,
-            ts: new Date().toLocaleTimeString(),
-          });
-        } else {
-          pushMessage({
-            id: generateId(),
-            role: "assistant",
-            kind: "text",
-            text: "I'm ready to answer your questions. What would you like to know?",
-            ts: new Date().toLocaleTimeString(),
-          });
-        }
-      } catch (e: any) {
-        const msg = e?.message || "Failed to get assessment question";
-        pushMessage({
-          id: generateId(),
-          role: "system",
-          kind: "text",
-          text: msg,
-          ts: new Date().toLocaleTimeString(),
-        });
-      } finally {
-        setTyping(false);
-      }
     } else {
+      // Send the label text to chat API (both demo and regular chat)
       await sendText(label);
     }
   };
@@ -863,10 +1003,15 @@ export default function AITrainerWidget({
   };
 
   const callNow = () => {
-    navigate("/demo-call");
+    navigate("/call");
   };
 
-  const closeWidget = () => setOpen(false);
+  const closeWidget = () => {
+    setOpen(false);
+    if (onClose) {
+      onClose();
+    }
+  };
 
   return (
     <>
@@ -880,7 +1025,7 @@ export default function AITrainerWidget({
             "flex items-center justify-center",
             "focus:outline-none focus:ring-4 focus:ring-primary/30 focus:ring-offset-2",
             "after:absolute after:inset-0 after:rounded-2xl after:bg-primary/0",
-            "after:transition-colors after:duration-300 hover:after:bg-primary/10"
+            "after:transition-colors after:duration-300 hover:after:bg-primary/10",
           )}
           aria-label="Open AI Trainer"
           onClick={() => setOpen(true)}
@@ -924,7 +1069,7 @@ export default function AITrainerWidget({
             "fixed inset-0 z-[100]",
             "flex flex-col bg-gradient-to-br from-background via-background/98 to-background/95",
             "overflow-hidden backdrop-blur-sm",
-            "animate-fade-in"
+            "animate-fade-in",
           )}
           role="dialog"
           aria-label="AI Trainer"
@@ -952,7 +1097,7 @@ export default function AITrainerWidget({
                       "w-2 h-2 rounded-full",
                       online
                         ? "bg-success animate-pulse-ring ring-2 ring-success/20"
-                        : "bg-yellow-500"
+                        : "bg-yellow-500",
                     )}
                     aria-hidden="true"
                   />
@@ -961,6 +1106,7 @@ export default function AITrainerWidget({
               </div>
             </div>
             <div className="flex gap-2">
+              <ThemeToggle size="sm" />
               {phoneNumber && (
                 <Button
                   size="sm"
@@ -1018,7 +1164,7 @@ export default function AITrainerWidget({
                   key={m.id}
                   className={cn(
                     "flex",
-                    m.role === "user" ? "justify-end" : "justify-start"
+                    m.role === "user" ? "justify-end" : "justify-start",
                   )}
                 >
                   <div
@@ -1028,7 +1174,7 @@ export default function AITrainerWidget({
                       "animate-slide-up-fade",
                       m.role === "user"
                         ? "bg-primary/10 border-primary/20 text-foreground border-2 border-primary/20"
-                        : "bg-card/95 border border-border hover:border-border/80"
+                        : "bg-card/95 border border-border hover:border-border/80",
                     )}
                   >
                     {/* {m.kind === "text" && (
@@ -1038,44 +1184,63 @@ export default function AITrainerWidget({
                       <div
                         className="text-base leading-relaxed prose prose-sm max-w-none dark:prose-invert"
                         dangerouslySetInnerHTML={{
-                          __html: formatMsgText(m.text).html
+                          __html: formatMsgText(m.text).html,
                         }}
                       />
                     )}
 
-                    {m.kind === "rich" && m.parts && (
+                    {m.kind === "rich" && (
                       <div className="space-y-4">
-                        {(() => {
-                          let currentCounter = 0;
-                          return m.parts.map((part, idx) => {
-                            if (part.kind === "text") {
-                              const { html, counter } = formatMsgText(part.text, currentCounter);
-                              currentCounter = counter;
-                              return (
-                                <div
-                                  key={idx}
-                                  className="text-base leading-relaxed prose prose-sm max-w-none dark:prose-invert"
-                                  dangerouslySetInnerHTML={{ __html: html }}
-                                />
-                              );
-                            }
-                            if (part.kind === "video" && part.video) {
-                              return (
-                                <div key={idx} className="mt-2">
-                                  {renderVideo(part.video)}
-                                </div>
-                              );
-                            }
-                            return null;
-                          });
-                        })()}
+                        {/* Use training response HTML format when available */}
+                        {m.useTrainingResponseFormat &&
+                        m.trainingResponseHtml ? (
+                          <TrainingResponseCard
+                            htmlContent={m.trainingResponseHtml}
+                            timestamp={m.ts}
+                          />
+                        ) : m.useCardFormat && m.cardSections ? (
+                          /* Use structured AnswerCard format when available */
+                          <AnswerCard
+                            sections={m.cardSections}
+                            timestamp={m.ts}
+                          />
+                        ) : m.parts ? (
+                          // Fallback to original rich content rendering
+                          <>
+                            {(() => {
+                              let currentCounter = 0;
+                              return m.parts.map((part, idx) => {
+                                if (part.kind === "text") {
+                                  const { html, counter } = formatMsgText(
+                                    part.text,
+                                    currentCounter,
+                                  );
+                                  currentCounter = counter;
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className="text-base leading-relaxed prose prose-sm max-w-none dark:prose-invert"
+                                      dangerouslySetInnerHTML={{ __html: html }}
+                                    />
+                                  );
+                                }
+                                if (part.kind === "video" && part.video) {
+                                  return (
+                                    <div key={idx} className="mt-2">
+                                      {renderVideo(part.video)}
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              });
+                            })()}
+                          </>
+                        ) : null}
                       </div>
                     )}
 
                     {m.kind === "video" && m.video && (
-                      <div className="mt-2">
-                        {renderVideo(m.video)}
-                      </div>
+                      <div className="mt-2">{renderVideo(m.video)}</div>
                     )}
 
                     {m.kind === "options" && m.options && (
@@ -1084,7 +1249,7 @@ export default function AITrainerWidget({
                           <div
                             className="text-base leading-relaxed prose prose-sm max-w-none dark:prose-invert mb-2"
                             dangerouslySetInnerHTML={{
-                              __html: formatMsgText(m.text).html
+                              __html: formatMsgText(m.text).html,
                             }}
                           />
                         )}
@@ -1150,7 +1315,7 @@ export default function AITrainerWidget({
                 "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
                 "border-2 border-transparent",
                 recording &&
-                "ring-2 ring-destructive border-destructive/50 bg-destructive/10"
+                  "ring-2 ring-destructive border-destructive/50 bg-destructive/10",
               )}
               onMouseDown={startRecording}
               onMouseUp={stopRecording}
@@ -1189,12 +1354,11 @@ export default function AITrainerWidget({
                   "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
                   "placeholder:text-muted-foreground",
                   "border-2 border-transparent transition-all duration-200",
-                  "group-hover:border-primary/20 focus:border-primary/20"
+                  "group-hover:border-primary/20 focus:border-primary/20",
                 )}
                 rows={1}
                 // placeholder="Type your message..."
                 placeholder={placeholder || "Type your message..."}
-
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value);
@@ -1222,7 +1386,7 @@ export default function AITrainerWidget({
                 "bg-primary/10 hover:bg-primary/20 text-primary",
                 "border-2 border-transparent transition-all duration-200",
                 "hover:border-primary/20",
-                "disabled:opacity-50 disabled:cursor-not-allowed"
+                "disabled:opacity-50 disabled:cursor-not-allowed",
               )}
             >
               <Send className="h-4 w-4" />
@@ -1233,32 +1397,32 @@ export default function AITrainerWidget({
             micPermission === "prompt" ||
             micPermission === "unsupported" ||
             !isSecure) && (
-              <div className="w-full border-t border-yellow-200 bg-yellow-50 px-6 py-3 text-xs text-yellow-700">
-                {!isSecure && (
-                  <>
-                    Microphone requires a secure context. Run on HTTPS or
-                    localhost.
-                  </>
-                )}
-                {isSecure && micPermission === "unsupported" && (
-                  <>Microphone API not supported by this browser.</>
-                )}
-                {isSecure && micPermission === "denied" && (
-                  <>
-                    Microphone is blocked in your browser. Click Enable Microphone
-                    and allow access in the prompt.
-                  </>
-                )}
-                {isSecure && micPermission === "prompt" && (
-                  <>To use voice, click Enable Microphone and grant permission.</>
-                )}
-                <div className="mt-2">
-                  <Button size="sm" onClick={ensureMicPermission} className="h-7">
-                    Enable Microphone
-                  </Button>
-                </div>
+            <div className="w-full border-t border-yellow-200 bg-yellow-50 px-6 py-3 text-xs text-yellow-700">
+              {!isSecure && (
+                <>
+                  Microphone requires a secure context. Run on HTTPS or
+                  localhost.
+                </>
+              )}
+              {isSecure && micPermission === "unsupported" && (
+                <>Microphone API not supported by this browser.</>
+              )}
+              {isSecure && micPermission === "denied" && (
+                <>
+                  Microphone is blocked in your browser. Click Enable Microphone
+                  and allow access in the prompt.
+                </>
+              )}
+              {isSecure && micPermission === "prompt" && (
+                <>To use voice, click Enable Microphone and grant permission.</>
+              )}
+              <div className="mt-2">
+                <Button size="sm" onClick={ensureMicPermission} className="h-7">
+                  Enable Microphone
+                </Button>
               </div>
-            )}
+            </div>
+          )}
         </section>
       )}
     </>

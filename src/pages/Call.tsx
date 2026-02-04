@@ -10,6 +10,9 @@ import {
   MicOff,
   Volume2,
   VolumeX,
+  Truck,
+  Headset,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +21,49 @@ import { cn } from "@/lib/utils";
 // const WEBSOCKET_URL = "wss://738002e1e676.ngrok-free.app/api/v1/client-stream";
 
 const WEBSOCKET_URL = "ws://98.93.49.166/api/v1/client-stream";
+
+// Available roles - kept in sync with HeroAITrainer.tsx
+type Role = {
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ElementType;
+  color: "primary" | "accent";
+  role: string;
+};
+
+const roles: Role[] = [
+  {
+    id: "695b8d76566a1ea150da303d",
+    title: "Carrier Representative",
+    description: "Coordinate with carriers, oversee loads, and keep freight moving on schedule.",
+    icon: Truck,
+    color: "primary",
+    role: "carrier_representative",
+  },
+  {
+    id: "695b8cc6566a1ea150da303c",
+    title: "Customer Representative",
+    description: "Support shippers and receivers, deliver proactive updates, and resolve issues fast.",
+    icon: Headset,
+    color: "accent",
+    role: "customer_representative",
+  },
+  {
+    id: "695b8e04566a1ea150da303e",
+    title: "Agent Manager",
+    description: "Orchestrate agent performance, monitor KPIs, and deliver operational insights.",
+    icon: ShieldCheck,
+    color: "accent",
+    role: "agent_manager",
+  },
+];
+
+// Helper function to get the full role object from the local roles array
+const getRoleById = (id: string | undefined): Role | null => {
+  if (!id) return null;
+  return roles.find(role => role.id === id) || null;
+};
 
 // Extend the Window interface to include ag2client
 declare global {
@@ -35,9 +81,12 @@ declare global {
   }
 }
 
-export default function DemoCall() {
+export default function Call() {
   const navigate = useNavigate();
-  const selectedRole = useAppStore((state) => state.selectedRole);
+  const storedRole = useAppStore((state) => state.selectedRole);
+  
+  // Match stored role with local roles array to get complete role object
+  const selectedRole = getRoleById(storedRole?.id) || (storedRole ? roles.find(r => r.title === storedRole.title) : null);
   const [isCallActive, setIsCallActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
@@ -56,12 +105,12 @@ export default function DemoCall() {
   const isProcessingAudioRef = useRef(false);
   const nextAudioStartTimeRef = useRef<number>(0);
 
-  // If no role is selected, redirect to demo roles page
+  // If no role is selected, redirect to dashboard
   useEffect(() => {
-    if (!selectedRole) {
-      navigate("/demo-roles");
+    if (!storedRole) {
+      navigate("/dashboard");
     }
-  }, [selectedRole, navigate]);
+  }, [storedRole, navigate]);
 
   // Timer for call duration
   useEffect(() => {
@@ -727,17 +776,13 @@ export default function DemoCall() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate("/demo-roles")}
+                onClick={() => navigate("/dashboard")}
                 className="gap-1.5 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
               >
                 <ArrowLeft className="h-4 w-4" />
-                <span className="hidden sm:inline">Back to Roles</span>
+                <span className="hidden sm:inline">Back to Dashboard</span>
                 <span className="sm:hidden">Back</span>
               </Button>
-              <div className="hidden sm:flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-sm text-muted-foreground">Demo Mode</span>
-              </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 rounded-full border border-accent/30 bg-accent/5 px-2.5 sm:px-4 py-1.5 sm:py-2">
               <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-accent" />

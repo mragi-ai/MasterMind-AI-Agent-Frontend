@@ -42,6 +42,56 @@ function durationToSeconds(duration: string): number {
   return timeToSeconds(duration);
 }
 
+// Helper to extract YouTube video ID from various URL formats
+function extractYouTubeId(url: string): string | null {
+  if (!url) return null;
+  
+  // Handle embed URLs: youtube.com/embed/VIDEO_ID
+  const embedMatch = url.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/);
+  if (embedMatch) return embedMatch[1];
+  
+  // Handle watch URLs: youtube.com/watch?v=VIDEO_ID or youtu.be/VIDEO_ID
+  const watchMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (watchMatch) return watchMatch[1];
+  
+  // Handle thumbnail URLs that might contain video ID: img.youtube.com/vi/VIDEO_ID/
+  const thumbnailMatch = url.match(/img\.youtube\.com\/vi\/([a-zA-Z0-9_-]{11})/);
+  if (thumbnailMatch) return thumbnailMatch[1];
+  
+  // Fallback: try to find any 11-character alphanumeric string that looks like a video ID
+  const genericMatch = url.match(/[?&/]([a-zA-Z0-9_-]{11})(?:[?&/]|$)/);
+  if (genericMatch) return genericMatch[1];
+  
+  return null;
+}
+
+// Helper to get a valid thumbnail URL from YouTube URL
+function getValidThumbnailUrl(youtubeUrl: string, providedThumbnail?: string): string {
+  // First, try to extract video ID from the youtube URL
+  let videoId = extractYouTubeId(youtubeUrl);
+  
+  // If we couldn't get it from youtube URL, try the provided thumbnail URL
+  if (!videoId && providedThumbnail) {
+    videoId = extractYouTubeId(providedThumbnail);
+  }
+  
+  // If we have a valid video ID, construct the proper thumbnail URL
+  if (videoId) {
+    return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+  }
+  
+  // Check if providedThumbnail is a valid non-YouTube URL
+  if (providedThumbnail && 
+      !providedThumbnail.includes("youtube.com") && 
+      !providedThumbnail.includes("ytimg.com") &&
+      providedThumbnail.startsWith("http")) {
+    return providedThumbnail;
+  }
+  
+  // Return empty string - will show fallback in UI
+  return "";
+}
+
 export default function TopicsShowcase() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [activeTopic, setActiveTopic] = useState<Topic | null>(null);
@@ -136,7 +186,7 @@ export default function TopicsShowcase() {
           progress,
           totalSteps,
           completedSteps,
-          videoThumb: video.thumbnail_url || "",
+          videoThumb: getValidThumbnailUrl(youtubeUrl, video.thumbnail_url),
           videoSrc: youtubeUrl,
           prompt: `Tell me about ${video.title || "this video"}`,
           videoDuration,
@@ -309,19 +359,27 @@ export default function TopicsShowcase() {
   }, []); // Empty deps - we use functional updates to avoid stale closures
 
   return (
-    <section className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <Card className="p-10 glass-effect shadow-custom-lg border-2 overflow-hidden relative bg-gradient-to-br from-white via-primary/2 to-accent/2">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-accent/8 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-
+    <section className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <Card className="p-6 md:p-8 shadow-lg border overflow-hidden relative bg-card">
+        {/* Subtle background decoration */}
+        <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        
         <div className="relative">
-          <div className="mb-8">
-            <h2 className="text-4xl font-bold mb-3 gradient-text">
-              Popular Training Topics
-            </h2>
-            <p className="text-muted-foreground">
-              Continue where you left off or start something new
-            </p>
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+                Popular Training Topics
+              </h2>
+              <p className="text-muted-foreground text-sm mt-1">
+                Continue where you left off or start something new
+              </p>
+            </div>
+            {/* {topics.length > 0 && (
+              <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
+                <span>{topics.filter(t => t.progress >= 100).length} of {topics.length} completed</span>
+              </div>
+            )} */}
           </div>
 
           {loading ? (
@@ -368,7 +426,7 @@ export default function TopicsShowcase() {
               <p className="text-muted-foreground">No videos available</p>
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {topics.map((topic) => (
                 <TopicCard
                   key={topic.id}
@@ -411,76 +469,96 @@ function TopicCard({
   const isStarted = topic.progress > 0 && topic.progress < 100;
 
   return (
-    <Card className="topic-card overflow-hidden hover-lift transition-all duration-300">
-      {/* Video thumbnail */}
-      <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-muted to-muted/50 rounded-t-lg">
-        <img
-          src={topic.videoThumb}
-          alt={topic.title}
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+    <Card 
+      className="group overflow-hidden border border-border/60 bg-card hover:border-primary/30 hover:shadow-lg transition-all duration-300 cursor-pointer"
+      onClick={() => onAction(topic)}
+    >
+      {/* Thumbnail */}
+      <div className="relative aspect-video overflow-hidden bg-muted">
+        {/* Fallback */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center">
+          <Play className="h-10 w-10 text-white/20" />
+        </div>
+        
+        {/* Image */}
+        {topic.videoThumb && (
+          <img
+            src={topic.videoThumb}
+            alt={topic.title}
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            onError={(e) => {
+              const img = e.target as HTMLImageElement;
+              const videoId = extractYouTubeId(topic.videoSrc);
+              if (videoId) {
+                if (img.src.includes("hqdefault")) {
+                  img.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                } else if (img.src.includes("mqdefault")) {
+                  img.src = `https://img.youtube.com/vi/${videoId}/default.jpg`;
+                } else if (!img.src.includes("default.jpg")) {
+                  img.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                } else {
+                  img.style.opacity = "0";
+                }
+              } else {
+                img.style.opacity = "0";
+              }
+            }}
+          />
+        )}
+        
+        {/* Dark overlay on hover */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-300" />
 
-        {/* Restored circular progress ring */}
-        {topic.progress > 0 && (
-          <div className="absolute top-3 right-3">
-            <div
-              className="topic-progress-ring"
-              style={{ "--progress": topic.progress } as any}
-            >
-              <div className="topic-progress-text">{topic.progress}%</div>
-            </div>
+        {/* Play button */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center shadow-xl transform scale-90 group-hover:scale-100 transition-transform duration-300">
+            <Play className="h-6 w-6 text-white ml-1" fill="currentColor" />
+          </div>
+        </div>
+
+        {/* Duration badge */}
+        {topic.totalSteps > 0 && (
+          <div className="absolute bottom-2 right-2 px-2 py-1 rounded bg-black/70 text-white text-xs font-medium">
+            {topic.totalSteps} {topic.totalSteps === 1 ? 'lesson' : 'lessons'}
           </div>
         )}
 
-        {/* Play overlay */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-16 h-16 rounded-full bg-primary backdrop-blur-md flex items-center justify-center shadow-xl ring-4 ring-primary/20 hover:scale-110 transition-transform">
-            <Play className="h-7 w-7 text-white ml-1" fill="currentColor" />
+        {/* Progress indicator */}
+        {topic.progress > 0 && (
+          <div className="absolute top-0 left-0 right-0 h-1 bg-black/20">
+            <div 
+              className="h-full bg-primary transition-all duration-300"
+              style={{ width: `${topic.progress}%` }}
+            />
           </div>
-        </div>
+        )}
       </div>
 
       {/* Content */}
-      <div className="p-5">
-        <h3 className="font-semibold text-lg mb-2">{topic.title}</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          {topic.description}
+      <div className="p-4">
+        {/* Status badge */}
+        {isComplete ? (
+          <div className="flex items-center gap-1.5 text-green-600 dark:text-green-500 text-xs font-medium mb-2">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            <span>Completed</span>
+          </div>
+        ) : isStarted ? (
+          <div className="flex items-center gap-1.5 text-primary text-xs font-medium mb-2">
+            <Clock className="h-3.5 w-3.5" />
+            <span>{topic.progress}% complete</span>
+          </div>
+        ) : null}
+
+        {/* Title */}
+        <h3 className="font-semibold text-base leading-snug line-clamp-2 mb-1.5 group-hover:text-primary transition-colors">
+          {topic.title}
+        </h3>
+
+        {/* Description */}
+        <p className="text-sm text-muted-foreground line-clamp-2">
+          {topic.description || "Watch this video to learn more"}
         </p>
-
-        {/* Steps */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-          {isComplete ? (
-            <>
-              <CheckCircle2 className="h-4 w-4 text-success" />
-              <span className="text-success font-medium">Completed</span>
-            </>
-          ) : (
-            <>
-              <Clock className="h-4 w-4" />
-              <span>
-                {topic.completedSteps} of {topic.totalSteps} steps
-              </span>
-            </>
-          )}
-        </div>
-
-        <div className="flex gap-3">
-          <Button
-            className="flex-1"
-            variant={isComplete ? "outline" : "default"}
-            onClick={() => onAction(topic)}
-          >
-            {isComplete ? "Review" : isStarted ? "Resume" : "Start"}
-          </Button>
-          {/* <Button
-            className="flex-1"
-            variant="secondary"
-            onClick={() => onOpenChat(topic.prompt)}
-          >
-            Ask AI
-          </Button> */}
-        </div>
       </div>
     </Card>
   );

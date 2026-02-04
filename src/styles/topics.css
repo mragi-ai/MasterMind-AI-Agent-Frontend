@@ -1,13 +1,13 @@
+/* Topic card styles */
 .topic-card {
-  @apply bg-card border-2 border-border;
-  background: linear-gradient(to bottom, hsl(var(--card)), hsl(var(--card) / 0.95));
-  box-shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.05), 0 2px 4px -1px hsl(0 0% 0% / 0.03);
+  @apply bg-card border border-border/60;
 }
 
 .topic-card:hover {
-  box-shadow: 0 10px 15px -3px hsl(0 0% 0% / 0.08), 0 4px 6px -2px hsl(0 0% 0% / 0.05);
+  @apply border-primary/30 shadow-lg;
 }
 
+/* Progress ring (used in video popup) */
 .topic-progress-ring {
   @apply relative w-12 h-12 rounded-full flex items-center justify-center;
   background: conic-gradient(

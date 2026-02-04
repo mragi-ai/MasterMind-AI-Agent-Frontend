@@ -12,9 +12,11 @@ import ResetPassword from "./pages/ResetPassword";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import VideoLessons from "./pages/VideoLessons";
 import VideoViewer from "./pages/VideoViewer";
-import DemoRoles from "./pages/DemoRoles";
-import DemoChat from "./pages/DemoChat";
-import DemoCall from "./pages/DemoCall";
+// Demo pages - commented out for now
+// import DemoRoles from "./pages/DemoRoles";
+// import DemoChat from "./pages/DemoChat";
+// import DemoCall from "./pages/DemoCall";
+import Call from "./pages/Call";
 import UserProfile from "./pages/UserProfile";
 
 const App = () => (
@@ -66,9 +68,18 @@ const App = () => (
             }
           />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/demo-roles" element={<DemoRoles />} />
-          <Route path="/demo-chat" element={<DemoChat />} />
-          <Route path="/demo-call" element={<DemoCall />} />
+          {/* Demo routes - commented out for now */}
+          {/* <Route path="/demo-roles" element={<DemoRoles />} /> */}
+          {/* <Route path="/demo-chat" element={<DemoChat />} /> */}
+          {/* <Route path="/demo-call" element={<DemoCall />} /> */}
+          <Route
+            path="/call"
+            element={
+              <ProtectedRoute>
+                <Call />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/profile"
             element={

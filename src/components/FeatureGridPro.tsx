@@ -38,7 +38,7 @@ const features: Feature[] = [
     description:
       "Role-play real conversations with AI coaches that adapt to your persona and give instant feedback.",
     metric: "Live Coaching",
-    prompt: "Start a coaching simulation for my role.",
+    prompt: "", // No default prompt - let user type their own message
     color: "primary",
   },
   {
@@ -48,7 +48,7 @@ const features: Feature[] = [
     description:
       "Stream cinematic walkthroughs and micro-trainings that mirror the scenarios you face every day.",
     metric: "200+ Lessons",
-    prompt: "Recommend a video lesson for my next milestone.",
+    prompt: "", // No default prompt
     color: "accent",
   },
   {
@@ -58,7 +58,7 @@ const features: Feature[] = [
     description:
       "Switch between guided drills, timed reps, or sandbox practice to sharpen skills at your pace.",
     metric: "3 Modes",
-    prompt: "What practice modes should I use today?",
+    prompt: "", // No default prompt
     color: "accent",
   },
   {
@@ -68,7 +68,7 @@ const features: Feature[] = [
     description:
       "Request a human coach when you need deeper guidance—AI shares your progress and notes instantly.",
     metric: "Under 3 min",
-    prompt: "Connect me with a mentor for this scenario.",
+    prompt: "", // No default prompt
     color: "primary",
   },
   {
@@ -78,7 +78,7 @@ const features: Feature[] = [
     description:
       "Access playbooks, SOPs, and scripts aligned with your role and new certifications.",
     metric: "Always Current",
-    prompt: "Show me the latest playbooks for my persona.",
+    prompt: "", // No default prompt
     color: "primary",
   },
   {
@@ -88,7 +88,7 @@ const features: Feature[] = [
     description:
       "Keyboard-first navigation, captions, and audio descriptions keep every learner in the loop.",
     metric: "WCAG 2.2 AA",
-    prompt: "Tell me about accessibility options for training.",
+    prompt: "", // No default prompt
     color: "accent",
   },
 ];
@@ -103,9 +103,10 @@ export default function FeatureGridPro() {
   const handleTryIt = (feature: Feature, e: MouseEvent) => {
     e.stopPropagation();
     if (feature.id === "chat") {
+      // Open chat without pre-filled prompt - let user type their own message
       window.dispatchEvent(
         new CustomEvent("open-ai-trainer", {
-          detail: { prompt: feature.prompt },
+          detail: {}, // No prompt - user will type their own message
         })
       );
     } else if (feature.id === "video") {

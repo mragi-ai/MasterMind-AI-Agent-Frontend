@@ -4,14 +4,14 @@ import AITrainerWidget from "@/components/AITrainerWidget";
 import useAppStore from "@/zustand";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Sparkles } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function DemoChat() {
   const navigate = useNavigate();
   const selectedRole = useAppStore((state) => state.selectedRole);
 
-  const chatPlaceholder = selectedRole
-    ? `Hi! I'm ready to help you practice as a ${selectedRole.title}. What would you like to work on today?`
-    : "Hi! I'm your AI training assistant. How can I help you today?";
+  // Simple placeholder - no default suggestions
+  const chatPlaceholder = "Type your message...";
 
   // Automatically open the chat widget when component mounts and set initial prompt
   useEffect(() => {
@@ -76,11 +76,14 @@ export default function DemoChat() {
                 <span className="text-sm text-muted-foreground">Demo Mode</span>
               </div>
             </div>
-            <div className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium text-primary">
-                {selectedRole.title}
-              </span>
+            <div className="flex items-center gap-3">
+              <ThemeToggle variant="outline" size="sm" className="bg-card/80 border-border shadow-sm" />
+              <div className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium text-primary">
+                  {selectedRole.title}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -149,6 +152,9 @@ export default function DemoChat() {
         placeholder={chatPlaceholder}
         onEscalate={() => {
           console.log("Escalation requested");
+        }}
+        onClose={() => {
+          navigate("/demo-roles");
         }}
         startOpen={true}
       />

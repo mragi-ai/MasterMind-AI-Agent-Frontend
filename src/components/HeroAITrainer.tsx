@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Phone, PlayCircle, ArrowLeft } from "lucide-react";
+import { MessageSquare, Phone, PlayCircle, ChevronDown, Truck, Headset, ShieldCheck, Check } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
 import evansLogo from "@/assets/evans-logo.png";
 import useAppStore from "@/zustand";
 import masteryLogo from "@/assets/mastery-logo.png";
@@ -15,13 +16,82 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+
+// Available roles for selection
+type Role = {
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ElementType;
+  color: "primary" | "accent";
+  role: string;
+};
+
+const roles: Role[] = [
+  {
+    id: "695b8d76566a1ea150da303d",
+    title: "Carrier Representative",
+    description: "Coordinate with carriers, oversee loads, and keep freight moving on schedule.",
+    icon: Truck,
+    color: "primary",
+    role: "carrier_representative",
+  },
+  {
+    id: "695b8cc6566a1ea150da303c",
+    title: "Customer Representative",
+    description: "Support shippers and receivers, deliver proactive updates, and resolve issues fast.",
+    icon: Headset,
+    color: "accent",
+    role: "customer_representative",
+  },
+  {
+    id: "695b8e04566a1ea150da303e",
+    title: "Agent Manager",
+    description: "Orchestrate agent performance, monitor KPIs, and deliver operational insights.",
+    icon: ShieldCheck,
+    color: "accent",
+    role: "agent_manager",
+  },
+];
+
+// Default role for simplified direct login flow
+const defaultRole = roles[0];
+
+// Helper function to get the full role object from the local roles array
+const getRoleById = (id: string | undefined): Role | null => {
+  if (!id) return null;
+  return roles.find(role => role.id === id) || null;
+};
 
 export default function HeroAITrainer() {
   const navigate = useNavigate();
-  const selectedRole = useAppStore((state) => state.selectedRole);
+  const storedRole = useAppStore((state) => state.selectedRole);
+  const setSelectedRole = useAppStore((state) => state.setSelectedRole);
   const [typedText, setTypedText] = useState("");
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Match stored role with local roles array to get complete role object with icon
+  const selectedRole = getRoleById(storedRole?.id) || (storedRole ? roles.find(r => r.title === storedRole.title) : null);
+
+  // Auto-select default role if none is set (simplified flow)
+  useEffect(() => {
+    if (!storedRole) {
+      setSelectedRole(defaultRole);
+    }
+  }, [storedRole, setSelectedRole]);
+
+  // Handle role selection
+  const handleRoleSelect = (role: Role) => {
+    setSelectedRole(role);
+  };
 
   // Prompt examples for each role
   const rolePrompts: Record<string, string> = {
@@ -41,12 +111,10 @@ export default function HeroAITrainer() {
     navigate("/");
   };
 
-  if (!selectedRole) {
-    navigate("/role-selection");
-    return null;
-  }
+  // Use selected role or default role - now properly matched from local roles array
+  const activeRole = selectedRole || defaultRole;
   const currentPrompt =
-    rolePrompts[selectedRole?.title || "Carrier Representative"] ||
+    rolePrompts[activeRole?.title || "Carrier Representative"] ||
     "Show me how to practice my next scenario.";
 
   // Typing animation effect
@@ -71,7 +139,7 @@ export default function HeroAITrainer() {
   };
 
   const getGradientClass = () => {
-    const color = selectedRole?.color || "primary";
+    const color = activeRole?.color || "primary";
     return color === "primary"
       ? "from-primary/20 to-primary/5"
       : "from-accent/20 to-accent/5";
@@ -98,18 +166,10 @@ export default function HeroAITrainer() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        {/* Top Navigation */}
-        <div className="flex justify-between items-center mb-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/role-selection")}
-            className="hover-lift"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Roles
-          </Button>
+        {/* Top Navigation - Simplified */}
+        <div className="flex justify-end items-center mb-6">
           <div className="flex items-center gap-3">
+            <ThemeToggle variant="outline" size="sm" className="bg-card/80 border-border shadow-sm" />
             <Button
               variant="outline"
               className="hover-lift shadow-sm"
@@ -119,23 +179,34 @@ export default function HeroAITrainer() {
               <Phone className="h-4 w-4 mr-2" />
               Call Support
             </Button>
-            <UserMenu onLogout={handleLogout} userName={selectedRole?.title} />
+            <UserMenu onLogout={handleLogout} userName={activeRole?.title} />
           </div>
         </div>
 
-        {/* Co-brand logos */}
-        <div className="co-brand-bar justify-center mb-10">
-          <div className="mastery-logo-wrapper">
-            <img src={masteryLogo} alt="Mastery" className="mastery-logo" />
+        {/* Co-brand logos with brand names */}
+        <div className="flex flex-col items-center gap-4 mb-10">
+          {/* Primary Brand - Mastery */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="mastery-logo-wrapper">
+              <img src={masteryLogo} alt="Mastery" className="mastery-logo" />
+            </div>
+        
           </div>
-          <div className="powered-by">
-            <span>Powered by</span>
-            <div className="evans-logo-wrapper">
-              <img
-                src={evansLogo}
-                alt="Evans Network of Companies"
-                className="evans-logo"
-              />
+          
+          {/* Secondary Brand - Evans */}
+          <div className="flex items-center gap-3 px-4 py-2 rounded-xl glass-effect border border-border/50">
+            <span className="text-muted-foreground text-sm font-medium">Powered by</span>
+            <div className="flex items-center gap-2">
+              <div className="evans-logo-wrapper">
+                <img
+                  src={evansLogo}
+                  alt="Evans Network of Companies"
+                  className="evans-logo"
+                />
+              </div>
+              <span className="text-foreground text-sm sm:text-base font-semibold">
+                Evans Network of Companies
+              </span>
             </div>
           </div>
         </div>
@@ -143,31 +214,88 @@ export default function HeroAITrainer() {
         <div className="grid lg:grid-cols-2 gap-10 items-center">
           {/* Left content */}
           <div className="space-y-6">
-            {/* Selected role badge */}
-            <div className="inline-flex items-center gap-3 px-5 py-3 rounded-full glass-effect border border-primary/20 mb-6">
-              <div
-                className={`w-10 h-10 flex items-center justify-center rounded-full text-lg ${selectedRole?.color === "primary"
-                  ? "bg-primary/10 text-primary"
-                  : "bg-accent/10 text-accent"
-                  }`}
-              >
-                {selectedRole?.title.includes("Dispatch")
-                  ? "🚛"
-                  : selectedRole?.title.includes("Billing")
-                    ? "💰"
-                    : selectedRole?.title.includes("Customer")
-                      ? "📞"
-                      : "✨"}
-              </div>
-              <div className="flex flex-col text-left">
-                <span className="text-base font-semibold text-foreground">
-                  {selectedRole?.title || "AI Assistant"}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {selectedRole?.description ||
-                    "Personalized support assistant"}
-                </span>
-              </div>
+            {/* Role selector section */}
+            <div className="space-y-3">
+              <h2 className="text-sm font-medium uppercase tracking-wider text-primary">
+                Your Training Persona
+              </h2>
+              <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="inline-flex items-center gap-3 px-5 py-3 rounded-full glass-effect border border-primary/20 mb-6 hover:border-primary/40 hover:shadow-lg transition-all duration-200 cursor-pointer group">
+                  <div
+                    className={cn(
+                      "w-10 h-10 flex items-center justify-center rounded-full text-lg transition-colors",
+                      activeRole?.color === "primary"
+                        ? "bg-primary/10 text-primary"
+                        : "bg-accent/10 text-accent"
+                    )}
+                  >
+                    {activeRole?.title.includes("Carrier") ? (
+                      <Truck className="h-5 w-5" />
+                    ) : activeRole?.title.includes("Customer") ? (
+                      <Headset className="h-5 w-5" />
+                    ) : activeRole?.title.includes("Agent") ? (
+                      <ShieldCheck className="h-5 w-5" />
+                    ) : (
+                      "✨"
+                    )}
+                  </div>
+                  <div className="flex flex-col text-left">
+                    <span className="text-base font-semibold text-foreground">
+                      {activeRole?.title || "Select Role"}
+                    </span>
+                    {/* <span className="text-xs text-muted-foreground">
+                      {activeRole?.description || "Choose your training persona"}
+                    </span> */}
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors ml-2" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-80 p-2">
+                <div className="px-2 py-1.5 mb-2">
+                  <p className="text-sm font-semibold text-foreground">Select Training Persona</p>
+                  <p className="text-xs text-muted-foreground">Choose a role to personalize your experience</p>
+                </div>
+                {roles.map((role) => {
+                  const Icon = role.icon;
+                  const isActive = activeRole?.id === role.id;
+                  return (
+                    <DropdownMenuItem
+                      key={role.id}
+                      onClick={() => handleRoleSelect(role)}
+                      className={cn(
+                        "flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors",
+                        isActive && "bg-primary/10"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "w-10 h-10 flex items-center justify-center rounded-full flex-shrink-0",
+                          role.color === "primary"
+                            ? "bg-primary/10 text-primary"
+                            : "bg-accent/10 text-accent"
+                        )}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold text-foreground">
+                            {role.title}
+                          </span>
+                          {isActive && (
+                            <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground line-clamp-2">
+                          {role.description}
+                        </span>
+                      </div>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             <p className="text-lg text-muted-foreground leading-relaxed">

@@ -15,8 +15,9 @@ export default function ProtectedRoute({ children, requireAuth = true }: Protect
     return <Navigate to="/" replace state={{ from: location }} />;
   }
 
+  // If authenticated and on login page, redirect directly to dashboard
   if (!requireAuth && isAuth) {
-    return <Navigate to="/role-selection" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;
